@@ -1,0 +1,107 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Gestion de stock{% endblock %} · Ets J.C.Tavarès</title>
+  <link rel="icon" href="{% static 'img/logo.jpg' %}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="{% static 'css/app.css' %}" rel="stylesheet">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+{% with u=request.user %}
+<div class="app-shell" id="appShell">
+  <div class="sidebar-backdrop" onclick="toggleNav(false)"></div>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="{% static 'img/logo.jpg' %}" alt="Logo">
+      <div class="name">Ets&nbsp;J.C.Tavarès<small>Gestion de stock</small></div>
+    </div>
+
+    <nav class="nav flex-column">
+      <a class="nav-link {% if actif == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+        <span class="ic"><i class="bi bi-speedometer2"></i></span> Tableau de bord</a>
+
+      <div class="nav-section">Ventes</div>
+      <a class="nav-link {% if actif == 'commandes' %}active{% endif %}" href="{% url 'ventes:commande_liste' %}">
+        <span class="ic"><i class="bi bi-cart3"></i></span> Commandes</a>
+      <a class="nav-link {% if actif == 'factures' %}active{% endif %}" href="{% url 'ventes:facture_liste' %}">
+        <span class="ic"><i class="bi bi-receipt"></i></span> Factures</a>
+      <a class="nav-link {% if actif == 'vente_detail' %}active{% endif %}" href="{% url 'ventes:vente_detail_create' %}">
+        <span class="ic"><i class="bi bi-upc-scan"></i></span> Vente au détail</a>
+      <a class="nav-link {% if actif == 'caisse' %}active{% endif %}" href="{% url 'caisse:liste' %}">
+        <span class="ic"><i class="bi bi-cash-coin"></i></span> Caisse</a>
+      <a class="nav-link {% if actif == 'suivi_annuel' %}active{% endif %}" href="{% url 'ventes:releve_annuel_client' %}">
+        <span class="ic"><i class="bi bi-journal-text"></i></span> Suivi client (année)</a>
+
+      <div class="nav-section">Stock</div>
+      <a class="nav-link {% if actif == 'stock' %}active{% endif %}" href="{% url 'stock:etat_stock' %}">
+        <span class="ic"><i class="bi bi-boxes"></i></span> État du stock</a>
+      <a class="nav-link {% if actif == 'appros' %}active{% endif %}" href="{% url 'stock:appro_liste' %}">
+        <span class="ic"><i class="bi bi-truck"></i></span> Approvisionnements</a>
+      <a class="nav-link {% if actif == 'sorties' %}active{% endif %}" href="{% url 'stock:sortie_liste' %}">
+        <span class="ic"><i class="bi bi-box-arrow-up"></i></span> Sorties (vol/casse)</a>
+      <a class="nav-link {% if actif == 'inventaires' %}active{% endif %}" href="{% url 'stock:inventaire_liste' %}">
+        <span class="ic"><i class="bi bi-clipboard-check"></i></span> Inventaires</a>
+
+      <div class="nav-section">Référentiel</div>
+      <a class="nav-link {% if actif == 'clients' %}active{% endif %}" href="{% url 'clients:liste' %}">
+        <span class="ic"><i class="bi bi-people"></i></span> Clients</a>
+      <a class="nav-link {% if actif == 'articles' %}active{% endif %}" href="{% url 'catalogue:article_liste' %}">
+        <span class="ic"><i class="bi bi-box-seam"></i></span> Articles</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a href="/admin/"><i class="bi bi-gear"></i> Administration</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-sm btn-outline-secondary burger" onclick="toggleNav(true)"><i class="bi bi-list"></i></button>
+        <h1 class="page-title">{% block page_title %}Tableau de bord{% endblock %}</h1>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        {% block topbar_actions %}{% endblock %}
+        <span class="user-chip">
+          <span class="avatar">{{ u.username|slice:":1"|upper }}</span>
+          <span class="d-none d-sm-inline">{{ u.get_full_name|default:u.username }}</span>
+        </span>
+        <form method="post" action="{% url 'logout' %}" class="m-0">{% csrf_token %}
+          <button class="btn btn-sm btn-outline-secondary" title="Se déconnecter"><i class="bi bi-box-arrow-right"></i></button>
+        </form>
+      </div>
+    </header>
+
+    <main class="content">
+      {% if messages %}
+        <div class="mb-3">
+          {% for m in messages %}
+            <div class="alert alert-{{ m.tags }} alert-dismissible fade show py-2" role="alert">
+              {{ m }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endwith %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  function toggleNav(open){ document.getElementById('appShell').classList.toggle('nav-open', open); }
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Créer un approvisionnement{% endblock %}
+{% block page_title %}Nouvel approvisionnement{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'stock:appro_liste' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-8 offset-lg-2">
+    <div class="card">
+      <div class="card-header">Informations générales</div>
+      <div class="card-body">
+        <form method="post">{% csrf_token %}
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="date" class="form-label"><span class="text-danger">*</span> Date</label>
+              <input type="date" id="date" name="date" class="form-control"
+                     value="{% now 'Y-m-d' %}" required>
+              <small class="text-muted">Date de l'approvisionnement.</small>
+            </div>
+            <div class="col-md-6">
+              <label for="fournisseur" class="form-label"><span class="text-danger">*</span> Fournisseur</label>
+              <select id="fournisseur" name="fournisseur" class="form-select" required>
+                <option value="">— Choisir un fournisseur —</option>
+                {% for f in fournisseurs %}
+                <option value="{{ f.id }}"
+                        data-taxes-url="{% url 'stock:fournisseur_taxes_json' f.id %}">
+                  {{ f.nom_fournisseur }}
+                </option>
+                {% endfor %}
+              </select>
+              <small class="text-muted">Les taxes proposées dépendent du fournisseur.</small>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="taxes" class="form-label">Taxes applicables (TVA, etc.)</label>
+            <select id="taxes" name="taxes" multiple class="form-select" size="4" disabled>
+              <option disabled>Sélectionnez d'abord un fournisseur…</option>
+            </select>
+            <small class="text-muted d-block mt-2">
+              <i class="bi bi-info-circle"></i>
+              Maintenez <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd>) pour choisir plusieurs taxes.
+              Elles s'appliquent au montant HT de l'approvisionnement.
+            </small>
+          </div>
+
+          <div class="mb-3">
+            <label for="note" class="form-label">Notes / Observations</label>
+            <textarea id="note" name="note" class="form-control" rows="3"
+                      placeholder="Informations complémentaires sur cet approvisionnement…"></textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Créer et ajouter des articles
+            </button>
+            <a href="{% url 'stock:appro_liste' %}" class="btn btn-outline-secondary">Annuler</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-question-circle"></i> Aide</div>
+      <div class="card-body">
+        <p class="mb-2"><strong>Fournisseur :</strong> les taxes affichées sont celles rattachées au fournisseur choisi (configurées dans sa fiche).</p>
+        <p class="mb-2"><strong>Taxes :</strong> calculées sur le montant HT total (somme des prix d'achat des lignes, remise déduite).</p>
+        <p class="mb-0"><strong>Après création :</strong> ajoutez les articles, leur conditionnement (casier/carton) et leur quantité. Le nombre de bouteilles est calculé automatiquement.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const selFournisseur = document.getElementById("fournisseur");
+  const selTaxes = document.getElementById("taxes");
+
+  function resetTaxes(message) {
+    selTaxes.innerHTML = "";
+    const opt = document.createElement("option");
+    opt.disabled = true;
+    opt.textContent = message;
+    selTaxes.appendChild(opt);
+    selTaxes.disabled = true;
+    selTaxes.size = 4;
+  }
+
+  function populateTaxes(taxes) {
+    selTaxes.innerHTML = "";
+
+    if (!taxes || taxes.length === 0) {
+      resetTaxes("Aucune taxe configurée pour ce fournisseur.");
+      return;
+    }
+
+    taxes.forEach(t => {
+      const o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.type_taxe + " (" + t.valeur_taxe + "%)";
+      selTaxes.appendChild(o);
+    });
+
+    selTaxes.disabled = false;
+    selTaxes.size = Math.max(4, taxes.length);
+  }
+
+  selFournisseur.addEventListener("change", function () {
+    const opt = selFournisseur.selectedOptions[0];
+    const url = opt ? opt.getAttribute("data-taxes-url") : null;
+
+    if (!url) {
+      resetTaxes("Sélectionnez d'abord un fournisseur…");
+      return;
+    }
+
+    fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+      .then(r => r.json())
+      .then(data => populateTaxes(data.taxes))
+      .catch(() => resetTaxes("Erreur de chargement des taxes."));
+  });
+})();
+</script>
+{% endblock %}

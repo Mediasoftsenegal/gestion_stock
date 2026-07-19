@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ticket {{ facture.numero }}</title>
+<style>
+  @page { size: 80mm auto; margin: 2mm; }
+  * { font-family: "Consolas", "Courier New", monospace; box-sizing: border-box; }
+  body { width: 76mm; font-size: 11px; color: #000; margin: 0 auto; }
+  .centre { text-align: center; }
+  .nom { font-size: 14px; font-weight: 700; }
+  .sep { border-top: 1px dashed #000; margin: 5px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 1px 0; font-size: 10.5px; }
+  th.num, td.num { text-align: right; }
+  .ligne-article td { padding-top: 3px; font-weight: 600; }
+  tfoot .total-row td { font-weight: 700; font-size: 12.5px; border-top: 1px dashed #000; padding-top: 4px; }
+  .pied { text-align: center; margin-top: 10px; font-size: 10px; }
+  .no-print { text-align: center; margin-top: 14px; }
+  @media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+  <div class="centre">
+    <div class="nom">{{ parametrage.nom_entreprise }}</div>
+    {% if parametrage.slogan %}<div>{{ parametrage.slogan }}</div>{% endif %}
+    {% if parametrage.adresse %}<div>{{ parametrage.adresse }}</div>{% endif %}
+    {% if parametrage.telephone %}<div>Tél : {{ parametrage.telephone }}</div>{% endif %}
+  </div>
+  <div class="sep"></div>
+  <div>Ticket : <strong>{{ facture.numero }}</strong></div>
+  <div>Date : {{ facture.date|date:"d/m/Y H:i" }}</div>
+  <div>Client : {{ facture.client.nom }}</div>
+  <div class="sep"></div>
+
+  <table>
+    <thead>
+      <tr><th>Article</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Mnt</th></tr>
+    </thead>
+    <tbody>
+      {% for l in facture.lignes.all %}
+      <tr class="ligne-article"><td colspan="4">{{ l.article.libarticle }}</td></tr>
+      <tr>
+        <td></td>
+        <td class="num">{{ l.quantite }}</td>
+        <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+        <td class="num">{{ l.montant|floatformat:0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="total-row"><td colspan="3">TOTAL</td><td class="num">{{ facture.montant_total|floatformat:0 }}</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="sep"></div>
+  <div>
+    Payé comptant
+    {% with p=facture.paiements.first %}{% if p %}({{ p.get_mode_display }}){% endif %}{% endwith %}
+    — {{ facture.montant_total|floatformat:0 }} FCFA
+  </div>
+
+  <div class="pied">
+    Merci de votre visite !<br>
+    Édité le {{ now|date:"d/m/Y H:i" }}
+  </div>
+
+  <div class="no-print">
+    <button onclick="window.print()">Imprimer le ticket</button>
+  </div>
+  <script>window.onload = function () { window.print(); };</script>
+</body>
+</html>

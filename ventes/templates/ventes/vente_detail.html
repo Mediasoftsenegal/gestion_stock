@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Vente au détail{% endblock %}
+{% block page_title %}Vente au détail (comptoir){% endblock %}
+{% block topbar_actions %}<a href="{% url 'ventes:facture_liste' %}" class="btn btn-sm btn-outline-secondary">← Factures</a>{% endblock %}
+
+{% block content %}
+<form method="post" id="venteForm">{% csrf_token %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Scanner / rechercher un article</div>
+      <div class="card-body">
+        <label class="form-label">Code-barre (douchette)</label>
+        <input type="text" id="barcodeInput" class="form-control mb-1"
+               placeholder="Scannez ou saisissez, puis Entrée" autocomplete="off" autofocus>
+        <div id="barcodeMsg" class="form-text"></div>
+
+        <label class="form-label mt-3">Ou rechercher par nom / code</label>
+        <input type="text" id="searchInput" class="form-control" placeholder="Nom de l'article…" autocomplete="off">
+        <div id="searchResults" class="list-group mt-1" style="max-height:220px;overflow:auto"></div>
+      </div>
+      <div class="card-body border-top">
+        <label class="form-label">Client (optionnel)</label>
+        <select name="client" class="form-select mb-3">
+          <option value="">— Vente comptoir (par défaut) —</option>
+          {% for c in clients %}<option value="{{ c.id }}">{{ c.nom }}</option>{% endfor %}
+        </select>
+        <label class="form-label">Mode de paiement (comptant)</label>
+        <select name="mode" class="form-select">
+          {% for val, lib in modes %}<option value="{{ val }}">{{ lib }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="card-body border-top">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted-2">Total à encaisser</span>
+          <span class="h4 mb-0" style="font-family:Poppins" id="totalGlobal">0</span>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 mt-2" id="btnEncaisser" disabled>
+          <i class="bi bi-cash-coin"></i> Encaisser et imprimer le ticket</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Panier</div>
+      <div class="table-responsive">
+        <table class="table mb-0" id="panierTable">
+          <thead>
+            <tr><th>Article</th><th class="num" style="width:14%">Qté</th>
+              <th class="num" style="width:18%">P.U.</th><th class="num" style="width:18%">Montant</th><th></th></tr>
+          </thead>
+          <tbody id="panierBody">
+            <tr id="emptyRow"><td colspan="5" class="text-center text-muted-2 py-4">
+              Scannez ou recherchez un article pour commencer.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const rechercheUrl = "{% url 'ventes:ajax_recherche_article' %}";
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n));
+const body = document.getElementById('panierBody');
+const emptyRow = document.getElementById('emptyRow');
+const btnEncaisser = document.getElementById('btnEncaisser');
+
+function recalc(){
+  let total = 0;
+  const lignes = body.querySelectorAll('tr.ligne');
+  lignes.forEach(tr => {
+    const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+    const prix = parseFloat(tr.dataset.prix);
+    const montant = qte * prix;
+    tr.querySelector('.montant').textContent = fmt(montant);
+    total += montant;
+  });
+  document.getElementById('totalGlobal').textContent = fmt(total);
+  btnEncaisser.disabled = lignes.length === 0;
+  emptyRow.style.display = lignes.length === 0 ? '' : 'none';
+}
+
+function ajouterArticle(art){
+  emptyRow.style.display = 'none';
+  let tr = body.querySelector(`tr[data-id="${art.article_id}"]`);
+  if(tr){
+    const inQte = tr.querySelector('.in-qte');
+    inQte.value = parseInt(inQte.value || '0', 10) + 1;
+  } else {
+    tr = document.createElement('tr');
+    tr.className = 'ligne';
+    tr.dataset.id = art.article_id;
+    tr.dataset.prix = art.prix_bouteille;
+    tr.innerHTML = `
+      <td class="fw-semibold">${art.libarticle}
+        <input type="hidden" name="article" value="${art.article_id}">
+        <div class="small text-muted-2">stock : ${art.stock}</div>
+      </td>
+      <td class="num"><input type="number" min="1" value="1" class="form-control form-control-sm num in-qte" name="quantite" style="width:70px;margin-left:auto"></td>
+      <td class="num pu">${fmt(art.prix_bouteille)}</td>
+      <td class="num montant fw-semibold">0</td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-del"><i class="bi bi-x-lg"></i></button></td>`;
+    tr.querySelector('.in-qte').addEventListener('input', recalc);
+    tr.querySelector('.btn-del').addEventListener('click', () => { tr.remove(); recalc(); });
+    body.appendChild(tr);
+  }
+  recalc();
+}
+
+const barcodeInput = document.getElementById('barcodeInput');
+const barcodeMsg = document.getElementById('barcodeMsg');
+barcodeInput.addEventListener('keydown', async (e) => {
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  const code = barcodeInput.value.trim();
+  if(!code) return;
+  barcodeMsg.textContent = 'Recherche…';
+  barcodeMsg.classList.remove('text-danger');
+  try {
+    const r = await fetch(rechercheUrl + '?code_barre=' + encodeURIComponent(code));
+    const data = await r.json();
+    if(data.trouve){
+      ajouterArticle(data);
+      barcodeMsg.textContent = '';
+    } else {
+      barcodeMsg.textContent = data.message || 'Article introuvable.';
+      barcodeMsg.classList.add('text-danger');
+    }
+  } catch(err){
+    barcodeMsg.textContent = 'Erreur de recherche.';
+    barcodeMsg.classList.add('text-danger');
+  }
+  barcodeInput.value = '';
+  barcodeInput.focus();
+});
+
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+let searchTimer = null;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if(q.length < 2){ searchResults.innerHTML = ''; return; }
+  searchTimer = setTimeout(async () => {
+    const r = await fetch(rechercheUrl + '?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    searchResults.innerHTML = '';
+    (data.resultats || []).forEach(a => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action';
+      item.innerHTML = `${a.libarticle} <span class="text-muted-2 small">— ${fmt(a.prix_bouteille)} FCFA · stock ${a.stock}</span>`;
+      item.addEventListener('click', () => {
+        ajouterArticle(a);
+        searchInput.value = '';
+        searchResults.innerHTML = '';
+        barcodeInput.focus();
+      });
+      searchResults.appendChild(item);
+    });
+  }, 250);
+});
+
+document.getElementById('venteForm').addEventListener('submit', (e) => {
+  if(body.querySelectorAll('tr.ligne').length === 0){ e.preventDefault(); alert('Ajoutez au moins un article.'); }
+});
+</script>
+{% endblock %}

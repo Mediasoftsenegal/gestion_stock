@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ client.nom }}{% endblock %}
+{% block page_title %}Fiche client{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'ventes:suivi_client' %}?client={{ client.pk }}" class="btn btn-sm btn-olive">
+    <i class="bi bi-graph-up"></i> État de suivi</a>
+  <a href="{% url 'ventes:commande_create' %}?client={{ client.pk }}" class="btn btn-sm btn-primary">
+    <i class="bi bi-cart-plus"></i> Nouvelle commande</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">{{ client.nom }}</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Code</dt><dd class="col-7">{{ client.codeclient }}</dd>
+          <dt class="col-5 text-muted-2">Catégorie</dt><dd class="col-7">{{ client.categorie.nom_categorie }}</dd>
+          <dt class="col-5 text-muted-2">Liste de tarifs</dt><dd class="col-7">{{ client.liste_tarif.nomtarif }}</dd>
+          <dt class="col-5 text-muted-2">Téléphone</dt><dd class="col-7">{{ client.telephone|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">E-mail</dt><dd class="col-7">{{ client.email|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Adresse</dt><dd class="col-7">{{ client.adresse|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Statut</dt>
+          <dd class="col-7">{% if client.actif %}<span class="badge-soft badge-ok">Actif</span>{% else %}<span class="badge-soft badge-danger">Inactif</span>{% endif %}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Dernières factures</div>
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead><tr><th>N°</th><th>Date</th><th class="num">Montant</th><th class="num">Reliquat</th><th>Statut</th></tr></thead>
+          <tbody>
+            {% for f in factures %}
+            <tr>
+              <td><a href="{% url 'ventes:facture_detail' f.pk %}" class="text-decoration-none">{{ f.numero }}</a></td>
+              <td>{{ f.date|date:"d/m/Y" }}</td>
+              <td class="num">{{ f.montant_total|floatformat:0 }}</td>
+              <td class="num">{{ f.reliquat|floatformat:0 }}</td>
+              <td>{% if f.annulee %}<span class="badge-soft badge-danger">Annulée</span>
+                  {% else %}<span class="badge-soft badge-neutre">{{ f.statut_paiement.label }}</span>{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted-2 py-4">Aucune facture.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

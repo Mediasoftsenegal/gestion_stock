@@ -1,0 +1,140 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ facture.numero }}</title>
+<style>
+  @page { size: A5 portrait; margin: 1cm 0.9cm; }
+  * { font-family: "Helvetica", "Arial", sans-serif; }
+  body { color: #2b2118; font-size: 9px; }
+  .entete { display: flex; justify-content: space-between; align-items: flex-start;
+            border-bottom: 2px solid #9c2b2b; padding-bottom: 8px; margin-bottom: 12px; }
+  .marque { display: flex; gap: 8px; align-items: center; }
+  .marque img { width: 38px; height: 38px; object-fit: contain; }
+  .marque .nom { font-size: 13px; font-weight: 700; color: #9c2b2b; }
+  .marque .sous { font-size: 8px; color: #6b6153; }
+  .doc-title { text-align: right; }
+  .doc-title h1 { margin: 0; font-size: 15px; color: #9c2b2b; letter-spacing: .5px; }
+  .doc-title .num { font-size: 10px; font-weight: 700; }
+  .doc-title .date { font-size: 8px; color: #6b6153; }
+  .parties { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .bloc { border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; width: 48%; }
+  .bloc .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px; color: #9c2b2b; font-weight: 700; }
+  .bloc .val { font-size: 9.5px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  thead th { color: #9c2b2b; font-size: 8px; text-transform: uppercase;
+             letter-spacing: .3px; padding: 4px 5px; text-align: left; border-bottom: 2px solid #9c2b2b; }
+  thead th.num, tbody td.num, tfoot td.num { text-align: right; }
+  tbody td { padding: 4px 5px; border-bottom: 1px solid #e6ddc7; }
+  tfoot td { padding: 3px 5px; }
+  tfoot .total td { font-weight: 700; font-size: 10px; border-top: 2px solid #9c2b2b; }
+  tfoot .reliquat td { font-weight: 700; color: #d4622a; }
+  .resume { margin-top: 8px; font-size: 8.5px; }
+  .resume .ligne { display: flex; justify-content: space-between; padding: 2px 0; color: #6b6153; }
+  .resume .lettres { font-style: italic; margin-top: 4px; color: #6b6153; }
+  .paiements { margin-top: 12px; font-size: 8.5px; }
+  .paiements h3 { font-size: 9px; color: #9c2b2b; margin: 0 0 4px; }
+  .pied { margin-top: 16px; font-size: 7.5px; color: #6b6153; text-align: center;
+          border-top: 1px solid #e6ddc7; padding-top: 6px; }
+  .annulee { color: #b3261e; font-weight: 700; border: 2px solid #b3261e;
+             display: inline-block; padding: 2px 8px; border-radius: 4px; transform: rotate(-4deg); }
+</style>
+</head>
+<body>
+  <div class="entete">
+    <div class="marque">
+      {% if parametrage.logo %}
+        <img src="{{ parametrage.logo.url }}" alt="">
+      {% else %}
+        <img src="{% static 'img/logo.jpg' %}" alt="">
+      {% endif %}
+      <div>
+        <div class="nom">{{ parametrage.nom_entreprise }}</div>
+        {% if parametrage.slogan %}<div class="sous">{{ parametrage.slogan }}</div>{% endif %}
+        {% if parametrage.adresse %}<div class="sous">{{ parametrage.adresse }}</div>{% endif %}
+        {% if parametrage.telephone or parametrage.email %}
+          <div class="sous">{{ parametrage.telephone }}{% if parametrage.telephone and parametrage.email %} · {% endif %}{{ parametrage.email }}</div>
+        {% endif %}
+        {% if parametrage.rccm or parametrage.ninea %}
+          <div class="sous">{% if parametrage.rccm %}RCCM {{ parametrage.rccm }}{% endif %}{% if parametrage.rccm and parametrage.ninea %} · {% endif %}{% if parametrage.ninea %}NINEA {{ parametrage.ninea }}{% endif %}</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>FACTURE</h1>
+      <div class="num">{{ facture.numero }}</div>
+      <div class="date">Émise le {{ facture.date|date:"d/m/Y" }}</div>
+      {% if facture.annulee %}<div class="annulee">ANNULÉE</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="bloc">
+      <div class="lbl">Client</div>
+      <div class="val">{{ facture.client.nom }}</div>
+      <div>{{ facture.client.codeclient }}{% if facture.client.telephone %} · {{ facture.client.telephone }}{% endif %}</div>
+      {% if facture.client.adresse %}<div>{{ facture.client.adresse }}</div>{% endif %}
+    </div>
+    <div class="bloc">
+      <div class="lbl">Référence commande</div>
+      <div class="val">{{ facture.commande.reference }}</div>
+      <div class="lbl" style="margin-top:6px">Liste de tarifs</div>
+      <div>{{ facture.commande.liste_tarif.nomtarif }}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th><th class="num">Btl</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+    <tbody>
+      {% for l in facture.lignes.all %}
+      <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+        <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
+        <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+        <td class="num">{{ l.montant|floatformat:0 }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5" class="num">Montant HT</td><td class="num">{{ facture.montant_ht|floatformat:0 }}</td></tr>
+      {% if facture.appliquer_tva %}
+      <tr><td colspan="5" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|floatformat:0 }}</td></tr>
+      {% endif %}
+      <tr class="total"><td colspan="5" class="num">TOTAL</td><td class="num">{{ facture.montant_total|floatformat:0 }} FCFA</td></tr>
+      <tr><td colspan="5" class="num">Payé</td><td class="num">{{ facture.montant_paye|floatformat:0 }}</td></tr>
+      <tr class="reliquat"><td colspan="5" class="num">Reliquat</td><td class="num">{{ facture.reliquat|floatformat:0 }} FCFA</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="resume">
+    <div class="ligne">
+      <span>Décompte par conditionnement</span>
+      <span>
+        {% for d in facture.decompte_conditionnements %}
+          {{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %}, {% endif %}
+        {% empty %}—{% endfor %}
+      </span>
+    </div>
+    <div class="ligne"><span>Nombre de bouteilles</span><span>{{ facture.nombre_bouteilles }}</span></div>
+    <div class="lettres">Arrêtée à la somme de : {{ facture.montant_en_lettres }}.</div>
+  </div>
+
+  {% if facture.paiements.all %}
+  <div class="paiements">
+    <h3>Règlements</h3>
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th>Mode</th><th class="num">Montant</th></tr></thead>
+      <tbody>
+        {% for p in facture.paiements.all %}
+        <tr><td>{{ p.date|date:"d/m/Y" }}</td><td>{{ p.get_type_paiement_display }}</td>
+          <td>{{ p.get_mode_display }}</td><td class="num">{{ p.montant|floatformat:0 }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="pied">
+    Document généré le {{ now|date:"d/m/Y à H:i" }} · {{ parametrage.nom_entreprise }}{% if parametrage.slogan %} — {{ parametrage.slogan }}{% endif %}
+  </div>
+</body>
+</html>

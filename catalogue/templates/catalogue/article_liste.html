@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Articles{% endblock %}
+{% block page_title %}Articles{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/admin/catalogue/article/add/" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> Nouvel article</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-6 col-md-5">
+        <label class="form-label mb-1">Recherche</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Désignation ou code…">
+      </div>
+      <div class="col-sm-4 col-md-4">
+        <label class="form-label mb-1">Type</label>
+        <select name="type" class="form-select">
+          <option value="">Tous</option>
+          {% for t in types %}
+            <option value="{{ t.id }}" {% if type_sel == t.id|stringformat:'s' %}selected{% endif %}>{{ t.nom }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2 col-md-3 d-flex gap-2">
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+        <a href="{% url 'catalogue:article_liste' %}" class="btn btn-outline-secondary">Réinit.</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Catalogue</span>
+    <span class="badge-soft badge-neutre">{{ total }} article{{ total|pluralize }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr><th>Code</th><th>Désignation</th><th>Type</th>
+            <th class="num">Stock</th><th class="num">Seuil</th><th class="num">Prix d'achat</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for l in lignes %}
+        <tr>
+          <td class="text-muted-2">{{ l.a.code }}</td>
+          <td>
+            <a href="{% url 'catalogue:article_detail' l.a.pk %}" class="fw-semibold text-decoration-none">
+              {{ l.a.libarticle }}
+            </a>
+            {% if not l.a.actif %}<span class="badge-soft badge-danger ms-1">inactif</span>{% endif %}
+          </td>
+          <td>{{ l.a.type_article.nom }}</td>
+          <td class="num {% if l.sous_seuil %}fw-bold{% endif %}" {% if l.sous_seuil %}style="color:var(--danger)"{% endif %}>
+              {{ l.stock }} {{ l.a.unite_base }}</td>
+          <td class="num text-muted-2">{{ l.a.seuil_alerte }}</td>
+          <td class="num">{{ l.a.prix_achat|floatformat:0 }}</td>
+          <td class="text-end">
+            {% if l.sous_seuil %}<span class="badge-soft badge-attente">sous seuil</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted-2 py-4">Aucun article.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="card-footer">
+  <nav aria-label="Pagination">
+    <ul class="pagination mb-0">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if type_sel %}&type={{ type_sel }}{% endif %}">
+          Précédent
+        </a>
+      </li>
+      {% endif %}
+
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if type_sel %}&type={{ type_sel }}{% endif %}">
+              {{ num }}
+            </a>
+          </li>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if type_sel %}&type={{ type_sel }}{% endif %}">
+          Suivant
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}
+{% endblock %}

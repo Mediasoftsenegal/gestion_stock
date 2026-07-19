@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Sorties exceptionnelles{% endblock %}
+{% block page_title %}Sorties (vol / casse / offert){% endblock %}
+{% block topbar_actions %}
+  <a href="/admin/stock/sortieexceptionnelle/add/" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg"></i> Nouvelle sortie</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">Sorties enregistrées</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Date</th><th>Article</th><th>Type</th><th class="num">Quantité</th><th>Motif</th></tr></thead>
+      <tbody>
+        {% for s in sorties %}
+        <tr>
+          <td>{{ s.date|date:"d/m/Y" }}</td>
+          <td class="fw-semibold">{{ s.article.designation }}</td>
+          <td><span class="badge-soft badge-danger">{{ s.get_type_sortie_display }}</span></td>
+          <td class="num">{{ s.quantite }}{% if s.conditionnement %} × {{ s.conditionnement.nom }}{% endif %}</td>
+          <td class="text-muted-2">{{ s.motif }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted-2 py-4">Aucune sortie.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

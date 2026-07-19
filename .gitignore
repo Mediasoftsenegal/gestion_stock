@@ -1,0 +1,33 @@
+# Environnement Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets et configuration locale
+.env
+.claude/
+
+# Base de donnees et dumps
+db.sqlite3
+backup.json
+*.sql
+*.sqlite3
+
+# Fichiers generes
+staticfiles/
+media/
+tmp/
+stderr.log
+
+# Archives et artefacts
+*.rar
+*.zip
+*.tar.gz
+
+# Editeurs et OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

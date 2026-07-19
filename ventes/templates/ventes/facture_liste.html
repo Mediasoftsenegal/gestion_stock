@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Factures{% endblock %}
+{% block page_title %}Factures{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'ventes:vente_detail_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-upc-scan"></i> Vente au détail</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-sm-5"><label class="form-label mb-1">Recherche</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Numéro ou client…"></div>
+    <div class="col-sm-4"><label class="form-label mb-1">Statut</label>
+      <select name="statut" class="form-select">
+        <option value="">Tous</option>
+        <option value="non_payee" {% if statut_sel == 'non_payee' %}selected{% endif %}>Non payée</option>
+        <option value="partielle" {% if statut_sel == 'partielle' %}selected{% endif %}>Partiellement payée</option>
+        <option value="payee" {% if statut_sel == 'payee' %}selected{% endif %}>Payée</option>
+        <option value="annulee" {% if statut_sel == 'annulee' %}selected{% endif %}>Annulée</option>
+      </select></div>
+    <div class="col-sm-3 d-flex gap-2">
+      <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+      <a href="{% url 'ventes:facture_liste' %}" class="btn btn-outline-secondary">Réinit.</a></div>
+  </form>
+</div></div>
+
+<div class="card"><div class="table-responsive">
+  <table class="table table-hover mb-0">
+    <thead><tr><th>N°</th><th>Date</th><th>Client</th><th class="num">Montant</th>
+      <th class="num">Payé</th><th class="num">Reliquat</th><th>Statut</th><th></th></tr></thead>
+    <tbody>
+      {% for f in factures %}
+      <tr>
+        <td class="fw-semibold">{{ f.numero }}</td>
+        <td>{{ f.date|date:"d/m/Y" }}</td>
+        <td>{{ f.client.nom }}</td>
+        <td class="num">{{ f.montant_total|floatformat:0 }}</td>
+        <td class="num">{{ f.montant_paye|floatformat:0 }}</td>
+        <td class="num">{{ f.reliquat|floatformat:0 }}</td>
+        <td>
+          {% if f.annulee %}<span class="badge-soft badge-danger">Annulée</span>
+          {% elif f.statut_paiement.value == 'PAYEE' %}<span class="badge-soft badge-ok">Payée</span>
+          {% elif f.statut_paiement.value == 'PARTIELLE' %}<span class="badge-soft badge-attente">Partielle</span>
+          {% else %}<span class="badge-soft badge-neutre">Non payée</span>{% endif %}
+        </td>
+        <td class="text-end"><a href="{% url 'ventes:facture_detail' f.pk %}" class="btn btn-sm btn-outline-primary">Ouvrir</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="8" class="text-center text-muted-2 py-4">Aucune facture.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>{{ titre }}</h1>
+<p>Vous allez annuler les factures suivantes. Cette action restaure le stock
+   correspondant et reste tracee (auteur, date, justificatif).</p>
+<ul>
+  {% for facture in factures %}
+    <li>{{ facture.numero }} — {{ facture.client }} — total {{ facture.montant_total }}</li>
+  {% endfor %}
+</ul>
+<form method="post">
+  {% csrf_token %}
+  {% for pk in selection %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">
+  {% endfor %}
+  <input type="hidden" name="action" value="action_annuler">
+  <input type="hidden" name="confirmer_annulation" value="1">
+  <div style="margin:1em 0;">{{ form.as_p }}</div>
+  <button type="submit" class="default">Confirmer l'annulation</button>
+  <a href="#" onclick="history.back();return false;" class="button cancel-link">Annuler</a>
+</form>
+{% endblock %}

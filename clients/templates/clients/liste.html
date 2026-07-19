@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+{% block page_title %}Clients{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/admin/clients/client/add/" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> Nouveau client</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-6 col-md-5">
+        <label class="form-label mb-1">Recherche</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control"
+               placeholder="Nom, code ou téléphone…">
+      </div>
+      <div class="col-sm-4 col-md-4">
+        <label class="form-label mb-1">Catégorie</label>
+        <select name="categorie" class="form-select">
+          <option value="">Toutes</option>
+          {% for c in categories %}
+            <option value="{{ c.id }}" {% if categorie_sel == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nom }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2 col-md-3 d-flex gap-2">
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+        <a href="{% url 'clients:liste' %}" class="btn btn-outline-secondary">Réinit.</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Liste des clients</span>
+    <span class="badge-soft badge-neutre">{{ total }} client{{ total|pluralize }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Code</th><th>Nom</th><th>Catégorie</th>
+          <th>Liste de tarifs</th><th>Téléphone</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr>
+          <td class="text-muted-2">{{ c.codeclient }}</td>
+          <td><a href="{% url 'clients:detail' c.pk %}" class="fw-semibold text-decoration-none">{{ c.nom }}</a>
+              {% if not c.actif %}<span class="badge-soft badge-danger ms-1">inactif</span>{% endif %}</td>
+          <td>{{ c.categorie.nom_categorie }}</td>
+          <td>{{ c.liste_tarif.nomtarif }}</td>
+          <td>{{ c.telephone|default:"—" }}</td>
+          <td class="text-end">
+            <a href="{% url 'clients:detail' c.pk %}" class="btn btn-sm btn-outline-primary">Fiche</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted-2 py-4">Aucun client trouvé.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

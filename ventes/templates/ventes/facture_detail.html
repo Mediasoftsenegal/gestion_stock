@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ facture.numero }}{% endblock %}
+{% block page_title %}Facture {{ facture.numero }}{% endblock %}
+{% block topbar_actions %}
+{% load monnaie %}
+
+  <a href="{% url 'ventes:facture_pdf' facture.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-pdf"></i> PDF</a>
+  <a href="{% url 'ventes:facture_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour</a>
+{% endblock %}
+
+{% block content %}
+{% if facture.annulee %}
+<div class="alert alert-danger"><i class="bi bi-x-octagon"></i>
+  <strong>Facture annulée</strong> le {{ facture.annulee_le|date:"d/m/Y H:i" }}
+  {% if facture.annulee_par %}par {{ facture.annulee_par.get_full_name|default:facture.annulee_par.username }}{% endif %}.
+  <div class="small mt-1">Motif : {{ facture.justificatif_annulation }}</div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span>Détail</span>
+        {% if not facture.annulee %}
+          {% if facture.statut_paiement.value == 'PAYEE' %}<span class="badge-soft badge-ok">Payée</span>
+          {% elif facture.statut_paiement.value == 'PARTIELLE' %}<span class="badge-soft badge-attente">Partiellement payée</span>
+          {% else %}<span class="badge-soft badge-neutre">Non payée</span>{% endif %}
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row small mb-3">
+          <div class="col-sm-6"><span class="text-muted-2">Client :</span> <strong>{{ facture.client.nom }}</strong></div>
+          <div class="col-sm-3"><span class="text-muted-2">Date :</span> {{ facture.date|date:"d/m/Y" }}</div>
+          <div class="col-sm-3"><span class="text-muted-2">Commande :</span> {{ facture.commande.reference }}</div>
+        </div>
+        <div class="table-responsive">
+          <table class="table mb-0">
+            <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+            <tbody>
+              {% for l in facture.lignes.all %}
+              <tr><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+                <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
+                <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
+                <td class="num fw-semibold">{{ l.montant|format_money_with_currency }}</td></tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr><td colspan="5" class="text-end text-muted-2">Déjà payé</td><td class="num">{{ facture.montant_paye|format_money_with_currency }}</td></tr>
+              <tr><th colspan="5" class="text-end" style="color:var(--terracotta)">Reliquat</th>
+                <th class="num" style="color:var(--terracotta);font-family:Poppins">{{ facture.reliquat|format_money_with_currency }}</th></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="card-body border-top small">
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Décompte par conditionnement</span>
+          <span>
+            {% for d in facture.decompte_conditionnements %}
+              {{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %} &nbsp;·&nbsp; {% endif %}
+            {% empty %}—{% endfor %}
+          </span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Nombre de bouteilles</span><span>{{ facture.nombre_bouteilles }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT</span><span>{{ facture.montant_ht|format_money_with_currency }}</span>
+        </div>
+        {% if facture.appliquer_tva %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>TVA (18%)</span><span>{{ facture.montant_tva|format_money_with_currency }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="fw-semibold">Total facture</span>
+          <span class="h4 mb-0" style="font-family:Poppins">{{ facture.montant_total|format_money_with_currency }}</span>
+        </div>
+        <div class="text-muted-2 fst-italic mt-1">Arrêtée à la somme de : {{ facture.montant_en_lettres }}.</div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header">Paiements</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Date</th><th>Type</th><th>Mode</th><th>Référence</th><th class="num">Montant</th></tr></thead>
+          <tbody>
+            {% for p in facture.paiements.all %}
+            <tr><td>{{ p.date|date:"d/m/Y H:i" }}</td><td>{{ p.get_type_paiement_display }}</td>
+              <td>{{ p.get_mode_display }}</td><td class="text-muted-2">{{ p.reference|default:"—" }}</td>
+              <td class="num fw-semibold">{{ p.montant|format_money_with_currency }}</td></tr>
+            {% empty %}<tr><td colspan="5" class="text-center text-muted-2 py-3">Aucun paiement.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    {% if not facture.annulee and facture.reliquat > 0 and peut_encaisser %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-cash-coin"></i> Encaisser</div>
+      <div class="card-body">
+        <form method="post" action="{% url 'ventes:encaisser' facture.pk %}">{% csrf_token %}
+          <label class="form-label">Montant</label>
+          <div class="input-group mb-2">
+            <input type="number" step="1" min="1" max="{{ facture.reliquat|format_money_with_currency }}" name="montant"
+                   value="{{ facture.reliquat|format_money_with_currency }}" class="form-control" required>
+            <span class="input-group-text">FCFA</span>
+          </div>
+          <div class="form-text mb-2">Reliquat : {{ facture.reliquat|format_money_with_currency }} — un montant inférieur enregistre un acompte.</div>
+          <label class="form-label">Mode</label>
+          <select name="mode" class="form-select mb-2">
+            {% for val, lib in modes %}<option value="{{ val }}">{{ lib }}</option>{% endfor %}
+          </select>
+          <label class="form-label">Référence (optionnel)</label>
+          <input type="text" name="reference" class="form-control mb-3" placeholder="N° chèque, transaction…">
+          <button class="btn btn-primary w-100"><i class="bi bi-check2"></i> Valider l'encaissement</button>
+        </form>
+      </div>
+    </div>
+    {% elif not facture.annulee and facture.reliquat <= 0 %}
+    <div class="alert alert-success"><i class="bi bi-check-circle"></i> Facture entièrement réglée.</div>
+    {% endif %}
+
+    {% if not facture.annulee and peut_annuler %}
+    <div class="card">
+      <div class="card-header text-danger"><i class="bi bi-x-octagon"></i> Annuler la facture</div>
+      <div class="card-body">
+        <p class="small text-muted-2">Une facture ne peut être supprimée. L'annulation exige un justificatif et restaure le stock.</p>
+        <form method="post" action="{% url 'ventes:facture_annuler' facture.pk %}">{% csrf_token %}
+          <textarea name="justificatif" class="form-control mb-2" rows="2" placeholder="Justificatif obligatoire…" required></textarea>
+          <button class="btn btn-outline-danger w-100" onclick="return confirm('Confirmer l\'annulation de cette facture ?')">Annuler la facture</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

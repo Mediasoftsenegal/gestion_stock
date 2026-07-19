@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Suivi client{% endblock %}
+{% block page_title %}État de suivi client{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-5"><label class="form-label mb-1">Client</label>
+      <select name="client" class="form-select" required>
+        <option value="">— Sélectionner —</option>
+        {% for c in clients %}<option value="{{ c.id }}" {% if client_sel == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nom }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-3"><label class="form-label mb-1">Période</label>
+      <select name="periode" class="form-select">
+        {% for val, lib in periodes %}<option value="{{ val }}" {% if periode_sel == val %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-2"><label class="form-label mb-1">Date de référence</label>
+      <input type="date" name="reference" value="{{ reference }}" class="form-control"></div>
+    <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-graph-up"></i> Afficher</button></div>
+  </form>
+</div></div>
+
+{% if rapport %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <div class="section-eyebrow">{{ client.nom }}</div>
+    <h2 class="h5 mb-0">Du {{ rapport.debut|date:"d/m/Y" }} au {{ rapport.fin|date:"d/m/Y" }}</h2>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="kpi"><div class="label">Total facturé</div><div class="value">{{ rapport.total_facture|floatformat:0 }}</div><div class="sub">FCFA</div></div></div>
+  <div class="col-md-4"><div class="kpi olive"><div class="label">Total payé</div><div class="value">{{ rapport.total_paye|floatformat:0 }}</div><div class="sub">FCFA</div></div></div>
+  <div class="col-md-4"><div class="kpi terra"><div class="label">Reste à payer</div><div class="value">{{ rapport.total_non_paye|floatformat:0 }}</div><div class="sub">FCFA</div></div></div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Factures de la période</span>
+    <span class="badge-soft badge-neutre">{{ rapport.factures|length }} facture{{ rapport.factures|length|pluralize }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>N°</th><th>Date facture</th><th class="num">Montant</th><th class="num">Payé</th>
+        <th class="num">Reliquat</th><th>Statut</th><th>Dernier paiement</th></tr></thead>
+      <tbody>
+        {% for f in rapport.factures %}
+        <tr class="{% if f.annulee %}text-muted-2{% endif %}">
+          <td class="fw-semibold">{{ f.numero }}</td>
+          <td>{{ f.date_facture|date:"d/m/Y" }}</td>
+          <td class="num">{{ f.montant|floatformat:0 }}</td>
+          <td class="num">{{ f.montant_paye|floatformat:0 }}</td>
+          <td class="num">{{ f.reliquat|floatformat:0 }}</td>
+          <td>{% if f.annulee %}<span class="badge-soft badge-danger">Annulée</span>
+              {% else %}<span class="badge-soft badge-neutre">{{ f.statut_paiement }}</span>{% endif %}</td>
+          <td>{{ f.dernier_paiement|date:"d/m/Y"|default:"—" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted-2 py-4">Aucune facture sur cette période.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body text-center text-muted-2 py-5">
+  <i class="bi bi-graph-up" style="font-size:2rem;opacity:.4"></i>
+  <p class="mt-2 mb-0">Sélectionnez un client et une période pour afficher son état de suivi.</p>
+</div></div>
+{% endif %}
+{% endblock %}

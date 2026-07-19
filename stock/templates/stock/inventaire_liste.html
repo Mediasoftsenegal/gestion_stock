@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Inventaires{% endblock %}
+{% block page_title %}Inventaires physiques{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'stock:inventaire_import' %}" class="btn btn-sm btn-primary"><i class="bi bi-upload"></i> Importer CSV</a>
+  <a href="/admin/stock/inventaire/add/" class="btn btn-sm btn-outline-secondary"><i class="bi bi-plus-lg"></i> Nouvel inventaire</a>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header">Inventaires</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Référence</th><th>Date</th><th>Période</th><th class="num">Lignes</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for inv in inventaires %}
+        <tr>
+          <td class="fw-semibold">{{ inv.reference }}</td>
+          <td>{{ inv.date|date:"d/m/Y" }}</td>
+          <td>{{ inv.get_periode_display }}</td>
+          <td class="num">{{ inv.lignes.count }}</td>
+          <td>{% if inv.valide %}<span class="badge-soft badge-ok">validé</span>{% else %}<span class="badge-soft badge-attente">brouillon</span>{% endif %}</td>
+          <td class="text-end">
+            {% if not inv.valide %}
+            <form method="post" action="{% url 'stock:inventaire_valider' inv.pk %}" class="d-inline">{% csrf_token %}
+              <button class="btn btn-sm btn-olive" onclick="return confirm('Valider cet inventaire ? Les écarts seront appliqués au stock.')">Valider</button>
+            </form>
+            {% endif %}
+            <a href="/admin/stock/inventaire/{{ inv.pk }}/change/" class="btn btn-sm btn-outline-secondary">Éditer</a>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted-2 py-4">Aucun inventaire.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

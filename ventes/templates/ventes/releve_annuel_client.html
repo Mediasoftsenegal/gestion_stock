@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load monnaie %}
+{% block title %}Suivi client (année){% endblock %}
+{% block page_title %}État de suivi client — année{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-6"><label class="form-label mb-1">Client</label>
+      <select name="client" class="form-select" required>
+        <option value="">— Sélectionner —</option>
+        {% for c in clients %}<option value="{{ c.id }}" {% if client_sel == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nom }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-3"><label class="form-label mb-1">Année</label>
+      <select name="annee" class="form-select">
+        {% for a in annees %}<option value="{{ a }}" {% if annee_sel == a %}selected{% endif %}>{{ a }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-3"><button class="btn btn-primary w-100"><i class="bi bi-journal-text"></i> Afficher</button></div>
+  </form>
+</div></div>
+
+{% if rapport %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="kpi"><div class="label">Total facturé ({{ rapport.annee }})</div><div class="value">{{ rapport.total_annee_facture|format_money_with_currency }}</div></div></div>
+  <div class="col-md-4"><div class="kpi olive"><div class="label">Total encaissé ({{ rapport.annee }})</div><div class="value">{{ rapport.total_annee_encaisse|format_money_with_currency }}</div></div></div>
+  <div class="col-md-4"><div class="kpi terra"><div class="label">Reliquat fin décembre</div><div class="value">{{ rapport.reliquat_fin_annee|format_money_with_currency }}</div></div></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="section-eyebrow">Client</span>
+    <h2 class="h5 mb-0">{{ rapport.client.nom }} — {{ rapport.annee }}</h2>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>N° / Libellé</th><th>Date</th><th class="num">Montant facturé</th><th class="num">Montant payé</th><th class="num">Reliquat</th></tr>
+      </thead>
+      <tbody>
+        {% for m in rapport.mois %}
+        <tr class="table-secondary"><th colspan="5">{{ m.nom }} {{ rapport.annee }}</th></tr>
+        {% for l in m.lignes %}
+        <tr class="{% if l.report %}fst-italic text-muted-2{% elif l.annulee %}text-muted-2{% endif %}">
+          <td>
+            {% if l.report %}{{ l.numero }}
+            {% elif l.pk %}<a href="{% url 'ventes:facture_detail' l.pk %}" class="text-decoration-none">{{ l.numero }}</a>{% if l.annulee %} <span class="badge-soft badge-danger">Annulée</span>{% endif %}
+            {% else %}{{ l.numero }}{% endif %}
+          </td>
+          <td>{{ l.date_facture|date:"d/m/Y" }}</td>
+          <td class="num">{{ l.montant|format_money_with_currency }}</td>
+          <td class="num">{{ l.montant_paye|format_money_with_currency }}</td>
+          <td class="num">{{ l.reliquat|format_money_with_currency }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted-2 py-2">Aucune opération.</td></tr>
+        {% endfor %}
+        <tr class="fw-semibold" style="border-top:2px solid var(--olive-fonce)">
+          <td colspan="2">Total {{ m.nom }}</td>
+          <td class="num">{{ m.total_facture|format_money_with_currency }}</td>
+          <td class="num">{{ m.total_encaisse|format_money_with_currency }}</td>
+          <td class="num">{{ m.total_reliquat|format_money_with_currency }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body text-center text-muted-2 py-5">
+  <i class="bi bi-journal-text" style="font-size:2rem;opacity:.4"></i>
+  <p class="mt-2 mb-0">Sélectionnez un client et une année pour afficher son état de suivi.</p>
+</div></div>
+{% endif %}
+{% endblock %}

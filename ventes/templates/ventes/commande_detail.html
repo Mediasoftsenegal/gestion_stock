@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ commande.reference }}{% endblock %}
+{% block page_title %}Commande {{ commande.reference }}{% endblock %}
+{% block topbar_actions %}<a href="{% url 'ventes:commande_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour</a>{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between">
+        <span>{{ commande.reference }}</span>
+        {% if commande.statut == 'BON_DE_COMMANDE' %}<span class="badge-soft badge-attente">Bon de commande</span>
+        {% elif commande.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>
+        {% else %}<span class="badge-soft badge-danger">Annulée</span>{% endif %}
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Client</dt><dd class="col-7">{{ commande.client.nom }}</dd>
+          <dt class="col-5 text-muted-2">Date</dt><dd class="col-7">{{ commande.date|date:"d/m/Y" }}</dd>
+          <dt class="col-5 text-muted-2">Liste de tarifs</dt><dd class="col-7">{{ commande.liste_tarif.nomtarif }}</dd>
+          {% if commande.note %}<dt class="col-5 text-muted-2">Note</dt><dd class="col-7">{{ commande.note }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if commande.statut == 'BON_DE_COMMANDE' %}
+    <div class="card">
+      <div class="card-header">Actions</div>
+      <div class="card-body d-grid gap-2">
+        {% if peut_valider %}
+        <form method="post" action="{% url 'ventes:commande_valider' commande.pk %}">{% csrf_token %}
+          <button class="btn btn-primary w-100" onclick="return confirm('Valider ce bon de commande ? Le stock sera décrémenté.')">
+            <i class="bi bi-check2-circle"></i> Valider</button>
+        </form>
+        {% else %}
+        <div class="alert alert-warning py-2 mb-0 small">Vous n'avez pas la permission de valider une commande.</div>
+        {% endif %}
+        <form method="post" action="{% url 'ventes:commande_supprimer' commande.pk %}">{% csrf_token %}
+          <button class="btn btn-outline-danger w-100" onclick="return confirm('Supprimer ce bon de commande ?')">
+            <i class="bi bi-trash"></i> Supprimer le bon</button>
+        </form>
+      </div>
+    </div>
+    {% elif commande.statut == 'VALIDEE' and not facture %}
+    <div class="card">
+      <div class="card-header">Actions</div>
+      <div class="card-body d-grid gap-2">
+        {% if peut_valider %}
+        <form method="post" action="{% url 'ventes:commande_generer_facture' commande.pk %}">{% csrf_token %}
+          <button class="btn btn-olive w-100">
+            <i class="bi bi-receipt"></i> Générer la facture</button>
+        </form>
+        {% else %}
+        <div class="alert alert-warning py-2 mb-0 small">Vous n'avez pas la permission de générer la facture.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% elif facture %}
+    <div class="card">
+      <div class="card-body">
+        <a href="{% url 'ventes:facture_detail' facture.pk %}" class="btn btn-olive w-100">
+          <i class="bi bi-receipt"></i> Voir la facture {{ facture.numero }}</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Lignes</div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+          <tbody>
+            {% for l in commande.lignes.all %}
+            <tr><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+              <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
+              <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+              <td class="num fw-semibold">{{ l.montant|floatformat:0 }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body border-top small">
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Décompte par conditionnement</span>
+          <span>
+            {% for d in commande.decompte_conditionnements %}
+              {{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %} &nbsp;·&nbsp; {% endif %}
+            {% empty %}—{% endfor %}
+          </span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Nombre de bouteilles</span><span>{{ commande.nombre_bouteilles }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT</span><span>{{ commande.montant_ht|floatformat:0 }}</span>
+        </div>
+        {% if commande.appliquer_tva %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>TVA (18%)</span><span>{{ commande.montant_tva|floatformat:0 }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="fw-semibold">Total commande</span>
+          <span class="h4 mb-0" style="font-family:Poppins">{{ commande.montant_total|floatformat:0 }}</span>
+        </div>
+        <div class="text-muted-2 fst-italic mt-1">Arrêtée à la somme de : {{ commande.montant_en_lettres }}.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

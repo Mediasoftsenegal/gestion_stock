@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% load monnaie %}
+{% block title %}Aperçu import inventaire{% endblock %}
+{% block page_title %}Aperçu de l'import{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'stock:inventaire_liste' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+
+{% if erreurs_mapping %}
+  <div class="alert alert-warning">
+    <strong>Mapping incomplet :</strong>
+    <ul class="mb-0">
+      {% for e in erreurs_mapping %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if erreurs_confirmation %}
+  <div class="alert alert-danger">
+    <strong>Impossible de confirmer l'import :</strong>
+    <ul class="mb-0">
+      {% for e in erreurs_confirmation %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-header">Colonnes détectées</div>
+  <div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="remap">
+      <div class="col-md-3">
+        <label class="form-label">Libellé article <span class="text-danger">*</span></label>
+        <select name="map_libelle" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.libelle %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Catégorie</label>
+        <select name="map_categorie" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.categorie %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Prix d'achat</label>
+        <select name="map_prix_achat" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.prix_achat %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Quantité (TOT BTS TTC) <span class="text-danger">*</span></label>
+        <select name="map_quantite" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.quantite %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Recalculer l'aperçu</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not erreurs_mapping %}
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="confirmer">
+
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Comparaison au catalogue — {{ date|date:"d/m/Y" }} ({{ periode }})</span>
+      <span>
+        <span class="badge-soft badge-ok">{{ trouvees }} trouvé(s)</span>
+        <span class="badge-soft badge-attente">{{ manquantes|length }} à créer</span>
+      </span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Libellé (CSV)</th>
+            <th>Statut</th>
+            <th>Code</th>
+            <th>Catégorie</th>
+            <th class="num">Prix d'achat</th>
+            <th class="num">Qté physique (TOT BTS TTC)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lignes_analysees %}
+          <tr>
+            <td>{{ l.libelle }}</td>
+            {% if l.article %}
+              <td><span class="badge-soft badge-ok">trouvé</span></td>
+              <td>{{ l.article.code }}</td>
+              <td>{{ l.article.categorie_articles|default:"—" }}</td>
+              <td class="num">{{ l.article.prix_achat|format_money_with_currency }}</td>
+              <td class="num">{{ l.quantite }}</td>
+            {% else %}
+              <td><span class="badge-soft badge-attente">à créer</span></td>
+              <td>
+                <input type="text" name="code_{{ l.index }}" class="form-control form-control-sm"
+                       value="{{ l.code_saisi|default:'' }}" placeholder="généré automatiquement si vide">
+              </td>
+              <td>
+                <select name="categorie_{{ l.index }}" class="form-select form-select-sm">
+                  <option value="">— aucune —</option>
+                  {% for c in categories %}
+                    <option value="{{ c.id }}"
+                      {% if l.categorie_id_saisi %}
+                        {% if l.categorie_id_saisi == c.id|stringformat:"s" %}selected{% endif %}
+                      {% elif l.categorie_suggeree.id == c.id %}selected{% endif %}>
+                      {{ c.categories_articles }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <input type="number" step="0.01" name="prix_{{ l.index }}" class="form-control form-control-sm"
+                       value="{{ l.prix_saisi|default:l.prix_achat|stringformat:'s' }}">
+              </td>
+              <td class="num">{{ l.quantite }}</td>
+            {% endif %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted-2 py-4">Aucune ligne exploitable dans le fichier.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-success" {% if not lignes_analysees %}disabled{% endif %}>
+      <i class="bi bi-check2-circle"></i> Confirmer et importer
+    </button>
+  </div>
+</form>
+
+<form method="post" class="mt-2">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="annuler">
+  <button type="submit" class="btn btn-outline-secondary btn-sm">Annuler l'import</button>
+</form>
+{% endif %}
+
+{% endblock %}

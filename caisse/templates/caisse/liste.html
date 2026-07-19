@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Caisse{% endblock %}
+{% block page_title %}Caisse{% endblock %}
+
+{% block topbar_actions %}
+  <form method="get" action="{% url 'caisse:voir' %}" class="d-flex gap-2 m-0">
+    <input type="date" name="date" value="{{ today|date:'Y-m-d' }}" class="form-control form-control-sm" style="width:auto">
+    <button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> Voir cette date</button>
+  </form>
+  {% if perms.caisse.peut_cloturer_caisse %}
+  <form method="post" action="{% url 'caisse:cloturer' %}" class="d-flex gap-2 m-0">{% csrf_token %}
+    <input type="date" name="date" value="{{ today|date:'Y-m-d' }}" class="form-control form-control-sm" style="width:auto">
+    <button class="btn btn-sm btn-primary"><i class="bi bi-lock"></i> Clôturer</button>
+  </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if caisse_jour %}
+<div class="alert alert-success py-2"><i class="bi bi-check-circle"></i>
+  La caisse d'aujourd'hui est clôturée — <a href="{% url 'caisse:detail' caisse_jour.pk %}">voir le détail</a>.</div>
+{% else %}
+<div class="alert alert-info py-2"><i class="bi bi-info-circle"></i>
+  La caisse d'aujourd'hui n'est pas encore clôturée — <a href="{% url 'caisse:voir' %}">voir l'aperçu en temps réel</a>.
+  Elle peut être clôturée manuellement ci-dessus ou automatiquement en fin de journée (tâche planifiée).</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">Historique des clôtures</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Date</th><th class="num">Factures</th><th class="num">Facturé</th>
+        <th class="num">Encaissé</th><th class="num">Non payé (jour)</th><th class="num">Reliquat global</th><th></th></tr></thead>
+      <tbody>
+        {% for c in caisses %}
+        <tr>
+          <td class="fw-semibold">{{ c.date|date:"d/m/Y" }}</td>
+          <td class="num">{{ c.nombre_factures }}</td>
+          <td class="num">{{ c.total_facture|floatformat:0 }}</td>
+          <td class="num" style="color:var(--olive-fonce);font-weight:600">{{ c.total_encaisse|floatformat:0 }}</td>
+          <td class="num">{{ c.total_non_paye|floatformat:0 }}</td>
+          <td class="num text-muted-2">{{ c.reliquat_global|floatformat:0 }}</td>
+          <td class="text-end"><a href="{% url 'caisse:detail' c.pk %}" class="btn btn-sm btn-outline-primary">Détail</a></td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted-2 py-4">Aucune clôture enregistrée.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

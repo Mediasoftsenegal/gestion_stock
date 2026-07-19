@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Caisse du {{ caisse.date|date:"d/m/Y" }}{% endblock %}
+{% block page_title %}Caisse du {{ caisse.date|date:"d/m/Y" }}{% endblock %}
+{% block topbar_actions %}<a href="{% url 'caisse:liste' %}" class="btn btn-sm btn-outline-secondary">← Retour</a>{% endblock %}
+
+{% block content %}
+{% if caisse.pk %}
+<div class="alert alert-success py-2 d-flex justify-content-between align-items-center">
+  <span><i class="bi bi-check-circle"></i> Caisse clôturée le {{ caisse.cloturee_le|date:"d/m/Y H:i" }}.</span>
+</div>
+{% else %}
+<div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
+  <span><i class="bi bi-info-circle"></i> Aperçu en temps réel — cette journée n'est pas encore clôturée.</span>
+  {% if peut_cloturer %}
+  <form method="post" action="{% url 'caisse:cloturer' %}" class="m-0">{% csrf_token %}
+    <input type="hidden" name="date" value="{{ caisse.date|date:'Y-m-d' }}">
+    <button class="btn btn-sm btn-primary"><i class="bi bi-lock"></i> Clôturer cette date</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="kpi"><div class="label">Facturé</div><div class="value">{{ caisse.total_facture|floatformat:0 }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="kpi olive"><div class="label">Encaissé</div><div class="value">{{ caisse.total_encaisse|floatformat:0 }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="kpi terra"><div class="label">Non payé (jour)</div><div class="value">{{ caisse.total_non_paye|floatformat:0 }}</div></div></div>
+  <div class="col-6 col-md-3"><div class="kpi alerte"><div class="label">Reliquat global</div><div class="value">{{ caisse.reliquat_global|floatformat:0 }}</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Factures du jour ({{ factures.count }})</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>N°</th><th>Client</th><th class="num">Montant</th><th class="num">Reliquat</th></tr></thead>
+          <tbody>
+            {% for f in factures %}
+            <tr><td><a href="{% url 'ventes:facture_detail' f.pk %}" class="text-decoration-none">{{ f.numero }}</a></td>
+              <td>{{ f.client.nom }}</td><td class="num">{{ f.montant_total|floatformat:0 }}</td><td class="num">{{ f.reliquat|floatformat:0 }}</td></tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-muted-2 py-3">Aucune facture.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Encaissements du jour ({{ paiements.count }})</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Facture</th><th>Type</th><th>Mode</th><th class="num">Montant</th></tr></thead>
+          <tbody>
+            {% for p in paiements %}
+            <tr><td>{{ p.facture.numero }}</td><td>{{ p.get_type_paiement_display }}</td>
+              <td>{{ p.get_mode_display }}</td><td class="num">{{ p.montant|floatformat:0 }}</td></tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-muted-2 py-3">Aucun encaissement.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

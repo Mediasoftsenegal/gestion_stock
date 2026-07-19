@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load monnaie %}
+
+{% block title %}Éditer {{ appro.reference }}{% endblock %}
+{% block page_title %}Approvisionnement {{ appro.reference }}{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'stock:appro_liste' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Retour</a>
+  <a href="{% url 'stock:appro_detail' appro.pk %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> Aperçu</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Entête -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Informations générales</div>
+      <div class="card-body">
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="update_appro">
+          <div class="mb-3">
+            <label for="date" class="form-label">Date</label>
+            <input type="date" id="date" name="date" class="form-control"
+                   value="{{ appro.date|date:'Y-m-d' }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Fournisseur</label>
+            <input type="text" class="form-control" value="{{ appro.fournisseur.nom_fournisseur }}" disabled>
+            <input type="hidden" name="fournisseur" value="{{ appro.fournisseur_id }}">
+          </div>
+          <div class="mb-3">
+            <label for="taxes" class="form-label">Taxes ({{ appro.fournisseur.nom_fournisseur }})</label>
+            <select id="taxes" name="taxes" multiple class="form-select" size="4">
+              {% for t in taxes_fournisseur %}
+                <option value="{{ t.id }}"
+                    data-taux="{{ t.valeur_taxe|default:0 }}"
+                    data-nature="{{ t.nature }}"
+                    data-alcool="{{ t.sur_boissons_alcoolisees|yesno:'1,0' }}"
+                    {% if t.id in taxes_selectionnees_ids %}selected{% endif %}>
+                  {{ t.type_taxe }} ({{ t.valeur_taxe }}%){% if t.nature != 'AUTRE' %} — {{ t.get_nature_display }}{% endif %}
+                </option>
+              {% empty %}
+                <option disabled>Aucune taxe configurée pour ce fournisseur.</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted"><kbd>Ctrl</kbd> pour sélection multiple. Les taxes « boissons alcoolisées » (TBA) ne portent que sur les articles alcoolisés.</small>
+          </div>
+          <div class="mb-3">
+            <label for="note" class="form-label">Notes</label>
+            <textarea id="note" name="note" class="form-control" rows="2">{{ appro.note }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-save"></i> Enregistrer l'entête</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Récapitulatif montants -->
+    <div class="card mt-3" id="recap_card">
+      <div class="card-header">Récapitulatif de la facture</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <span>Montant HT</span>
+          <strong id="montant_ht_calc">{{ appro.montant_ht|format_money_with_currency }}</strong>
+        </div>
+
+        <div id="tba_row" class="d-flex justify-content-between align-items-start" style="display:none;">
+          <span>T.B.A <small class="text-muted">(boissons alcoolisées)</small></span>
+          <strong id="tba_amount">0,00 </strong>
+        </div>
+
+        <div id="tigb_row" class="d-flex justify-content-between align-items-start" style="display:none;">
+          <span>T.I.G.B</span>
+          <strong id="tigb_amount">0,00 </strong>
+        </div>
+
+        <div id="tva_row" class="d-flex justify-content-between align-items-start" style="display:none;">
+          <span>TVA</span>
+          <strong id="tva_amount">0,00 </strong>
+        </div>
+
+        <div id="egal_row" class="d-flex justify-content-between align-items-start text-muted" style="display:none;">
+          <span>Taxe d'égalisation</span>
+          <span><em>{{taxe.Valeur}}</em></span>
+        </div>
+        <div id="recap_taxes_note" class="small text-muted mt-1"></div>
+        <hr class="my-2">
+        <div class="d-flex justify-content-between fs-5">
+          <span><strong>TOTAL FACTURE</strong></span>
+          <strong id="ttc_calc">{{ appro.montant_ttc|format_money_with_currency }}</strong>
+        </div>
+
+        <form method="post" action="{% url 'stock:appro_valider' appro.pk %}" class="mt-3"
+              onsubmit="return confirm('Valider cet approvisionnement ? Les quantités seront ajoutées au stock (entrées). Action irréversible.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success w-100" {% if not lignes %}disabled{% endif %}>
+            <i class="bi bi-check2-circle"></i> Valider (ajouter au stock)
+          </button>
+        </form>
+        {% if not lignes %}<small class="text-muted d-block mt-1">Ajoutez au moins une ligne pour valider.</small>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Lignes -->
+  <div class="col-lg-8">
+    <!-- Ajout d'une ligne -->
+    <div class="card mb-3">
+      <div class="card-header">Ajouter un article</div>
+      <div class="card-body">
+        <form method="post" class="row g-2 align-items-end">{% csrf_token %}
+          <input type="hidden" name="action" value="add_ligne">
+          <div class="col-md-4">
+            <label class="form-label">Article</label>
+            <input type="text" id="article_search" class="form-control mb-2" placeholder="Rechercher un article..." autocomplete="off">
+            <select name="article_id" id="article_id" class="form-select" required>
+              <option value="">— Article —</option>
+              {% for a in articles %}
+                <option value="{{ a.id }}"
+                        data-categorie="{{ a.categorie_article|default:'' }}">
+                  {{ a.libarticle|default:a.libarticle }}
+                </option>
+              {% endfor %}
+            </select>
+            <div id="taxe_article_note" class="form-text text-muted mt-1"></div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Conditionnement</label>
+            <select name="conditionnement_id" id="conditionnement_id" class="form-select">
+              <option value="" data-unites="1">Unité (1)</option>
+              {% for c in conditionnements %}
+                <option value="{{ c.id }}" data-unites="{{ c.nombre_unites }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Quantité</label>
+            <input type="number" name="quantite" id="quantite" class="form-control" min="1" value="1" required>
+            <small class="text-muted">en casier / carton</small>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Bouteilles</label>
+            <input type="text" id="apercu_bouteilles" class="form-control bg-light" value="1" readonly>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Prix d'achat</label>
+            <input type="number" step="0.01" name="prix_achat" class="form-control" placeholder="par conditionnement">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Remise (%)</label>
+            <input type="number" step="1" name="remise" class="form-control" value="0" min="0" max="100">
+          </div>
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Ajouter</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tableau des lignes -->
+    <div class="card">
+      <div class="card-header">Lignes ({{ lignes|length }})</div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Article</th>
+              <th>Conditionnement</th>
+              <th class="num">Quantité</th>
+              <th>Catégorie</th>
+              <th class="num">Bouteilles</th>
+              <th class="num">Prix achat</th>
+              <th class="num">Remise</th>
+              <th class="num">Montant HT</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in lignes %}
+            <tr data-alcool="{{ l.est_alcoolise|yesno:'1,0' }}"
+                data-montant="{{ l.montant_ht|stringformat:'f' }}">
+              <td class="fw-semibold">{{ l.article.libarticle|default:l.article.libarticle }}</td>
+              <td>{{ l.conditionnement|default:"Unité" }}</td>
+              <td class="num">{{ l.quantite }}</td>
+              <td>
+                {{ l.article.categorie_article|default:"—" }}
+                {% if l.est_alcoolise %}<span class="badge bg-warning text-dark">alcool</span>{% endif %}
+              </td>
+              <td class="num fw-semibold">{{ l.nobre_bouteilles }}</td>
+              <td class="num">{% if l.prix_achat %}{{ l.prix_achat|format_money_with_currency }}{% else %}&mdash;{% endif %}</td>
+              <td class="num">{{ l.remise|floatformat:0 }}%</td>
+              <td class="num">{{ l.montant_ht|format_money_with_currency }}</td>
+              <td class="text-end">
+                <form method="post" onsubmit="return confirm('Supprimer cette ligne ?');">{% csrf_token %}
+                  <input type="hidden" name="action" value="delete_ligne">
+                  <input type="hidden" name="ligne_id" value="{{ l.id }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9" class="text-center text-muted py-4">Aucune ligne. Ajoutez un article ci-dessus.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  // --- Utilitaire : catégorie alcoolisée (tolérant accents/orthographe) ---
+  function estAlcool(txt) {
+    var n = (txt || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (n.indexOf("non alco") !== -1 || n.indexOf("sans alco") !== -1) return false;
+    return n.indexOf("alco") !== -1;
+  }
+
+  // --- Fonction de formatage monétaire (pour JavaScript) ---
+  function formatMoney(value) {
+    if (value === null || value === undefined || isNaN(value)) {
+      return "0,00";
+    }
+    return Number(value)
+      .toLocaleString("fr-FR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true
+      })
+      .replace(/\./g, ' ');
+  }
+
+  function formatMoneyWithCurrency(value) {
+    return formatMoney(value);
+  }
+
+  // --- Aperçu du nombre de bouteilles ---
+  const cond = document.getElementById("conditionnement_id");
+  const qte = document.getElementById("quantite");
+  const apercu = document.getElementById("apercu_bouteilles");
+  function majBouteilles() {
+    const opt = cond.selectedOptions[0];
+    const unites = opt ? parseInt(opt.getAttribute("data-unites") || "1", 10) : 1;
+    const q = parseInt(qte.value || "0", 10);
+    apercu.value = (isNaN(q) ? 0 : q) * (isNaN(unites) ? 1 : unites);
+  }
+  if (cond) cond.addEventListener("change", majBouteilles);
+  if (qte) qte.addEventListener("input", majBouteilles);
+  majBouteilles();
+
+  // --- Recherche d'article ---
+  const articleSearch = document.getElementById("article_search");
+  const articleSelect = document.getElementById("article_id");
+  const taxeArticleNote = document.getElementById("taxe_article_note");
+
+  function filtrerArticles() {
+    const q = (articleSearch.value || "").trim().toLowerCase();
+    Array.from(articleSelect.options).forEach((opt) => {
+      if (!opt.value) return;
+      opt.hidden = q && !opt.textContent.toLowerCase().includes(q);
+    });
+  }
+  if (articleSearch) articleSearch.addEventListener("input", filtrerArticles);
+
+  if (articleSelect) {
+    articleSelect.addEventListener("change", () => {
+      const opt = articleSelect.selectedOptions[0];
+      const cat = opt ? (opt.getAttribute("data-categorie") || "") : "";
+      if (taxeArticleNote) {
+        taxeArticleNote.textContent = estAlcool(cat)
+          ? "Article alcoolisé : la T.B.A s'appliquera à cette ligne."
+          : (opt && opt.value ? "Article non alcoolisé : la T.B.A ne s'applique pas." : "");
+      }
+    });
+  }
+
+  // --- Récapitulatif de la facture ---
+  const taxesSelect = document.getElementById("taxes");
+  const montantHtEl = document.getElementById("montant_ht_calc");
+  const tbaRow = document.getElementById("tba_row");
+  const tbaAmountEl = document.getElementById("tba_amount");
+  const tigbRow = document.getElementById("tigb_row");
+  const tigbAmountEl = document.getElementById("tigb_amount");
+  const tvaRow = document.getElementById("tva_row");
+  const tvaAmountEl = document.getElementById("tva_amount");
+  const egalRow = document.getElementById("egal_row");
+  const ttcEl = document.getElementById("ttc_calc");
+  const recapNote = document.getElementById("recap_taxes_note");
+
+  function normalizeNature(value) {
+    return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  }
+
+  function parseTaxRate(value) {
+    var n = String(value || "").trim().replace(",", ".");
+    var v = parseFloat(n);
+    return isNaN(v) ? null : v;
+  }
+
+  function getTaxOptions() {
+    if (!taxesSelect) return [];
+    var options = Array.from(taxesSelect.options).filter(function (opt) {
+      return opt.value && !opt.disabled;
+    });
+    var selected = options.filter(function (opt) {
+      return opt.selected;
+    });
+    if (selected.length > 0) return selected;
+    if (options.length === 1) return options;
+    return [];
+  }
+
+  function tauxParNature(nature) {
+    if (!taxesSelect) return null;
+    var cible = normalizeNature(nature);
+    var taxes = getTaxOptions();
+    var trouve = null;
+
+    taxes.forEach(function (opt) {
+      if (normalizeNature(opt.getAttribute("data-nature")) === cible) {
+        var taux = parseTaxRate(opt.getAttribute("data-taux"));
+        if (taux !== null) trouve = taux;
+      }
+    });
+
+    return trouve;
+  }
+
+  function natureSelectionnee(nature) {
+    if (!taxesSelect) return false;
+    var cible = normalizeNature(nature);
+    return getTaxOptions().some(function (opt) {
+      return normalizeNature(opt.getAttribute("data-nature")) === cible;
+    });
+  }
+
+  function getSingleTaxRate() {
+    var taxes = getTaxOptions();
+    if (taxes.length !== 1) return null;
+    return parseTaxRate(taxes[0].getAttribute("data-taux"));
+  }
+
+  function recalcul() {
+    var totalHt = 0, htAlcool = 0;
+    document.querySelectorAll("tbody tr[data-montant]").forEach(function (row) {
+      var m = parseFloat(row.getAttribute("data-montant")) || 0;
+      totalHt += m;
+      if (row.getAttribute("data-alcool") === "1") htAlcool += m;
+    });
+
+    var tauxTba = tauxParNature("TBA");
+    var tauxTigb = tauxParNature("TIGB");
+    var tauxTva = tauxParNature("TVA");
+    var singleTaxRate = getSingleTaxRate();
+
+    var tba = tauxTba !== null ? htAlcool * tauxTba / 100 : 0;
+    var tigb = tauxTigb !== null ? (totalHt - htAlcool) * tauxTigb / 100 : 0;
+
+    var tva = 0;
+    if (tauxTva !== null) {
+      tva = (totalHt + tba + tigb) * tauxTva / 100;
+    } else if (singleTaxRate !== null) {
+      tva = (totalHt + tba + tigb) * singleTaxRate / 100;
+    }
+
+    var total = totalHt + tba + tigb + tva;
+
+    if (montantHtEl) montantHtEl.textContent = formatMoneyWithCurrency(totalHt);
+    if (tbaRow) tbaRow.style.display = (tba > 0 || tauxTba !== null) ? "" : "none";
+    if (tbaAmountEl) tbaAmountEl.textContent = formatMoneyWithCurrency(tba);
+    if (tigbRow) tigbRow.style.display = (tigb > 0 || tauxTigb !== null) ? "" : "none";
+    if (tigbAmountEl) tigbAmountEl.textContent = formatMoneyWithCurrency(tigb);
+    if (tvaRow) tvaRow.style.display = (tva > 0 || tauxTva !== null || singleTaxRate !== null) ? "" : "none";
+    if (tvaAmountEl) tvaAmountEl.textContent = formatMoneyWithCurrency(tva);
+    if (egalRow) egalRow.style.display = natureSelectionnee("EGALISATION") ? "" : "none";
+    if (ttcEl) ttcEl.textContent = formatMoneyWithCurrency(total);
+
+    if (recapNote) {
+      recapNote.textContent = (tauxTba !== null && htAlcool === 0)
+        ? "TBA sélectionnée, mais aucune ligne alcoolisée : TBA = 0."
+        : "";
+    }
+  }
+
+  if (taxesSelect) taxesSelect.addEventListener("change", recalcul);
+  filtrerArticles();
+  recalcul();
+})();
+</script>
+{% endblock extra_js %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord{% endblock %}
+{% block page_title %}Tableau de bord{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'ventes:commande_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-cart-plus"></i> Nouvelle commande</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="kpi">
+    <div class="label">Chiffre d'affaires du jour</div>
+    <div class="value">{{ ca_jour|floatformat:0 }}</div>
+    <div class="sub">{{ nb_factures_jour }} facture{{ nb_factures_jour|pluralize }} · encaissé {{ encaisse_jour|floatformat:0 }}</div>
+  </div></div>
+  <div class="col-6 col-lg-3"><div class="kpi olive">
+    <div class="label">CA du mois</div>
+    <div class="value">{{ ca_mois|floatformat:0 }}</div>
+    <div class="sub">Depuis le 1er du mois</div>
+  </div></div>
+  <div class="col-6 col-lg-3"><div class="kpi terra">
+    <div class="label">Bons en attente</div>
+    <div class="value">{{ nb_bons }}</div>
+    <div class="sub">À valider en factures</div>
+  </div></div>
+  <div class="col-6 col-lg-3"><div class="kpi alerte">
+    <div class="label">Articles sous seuil</div>
+    <div class="value">{{ nb_sous_seuil }}</div>
+    <div class="sub"><a href="{% url 'stock:etat_stock' %}?filtre=alerte" class="text-decoration-none">Voir le stock</a></div>
+  </div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-cart3"></i> Bons de commande en attente</span>
+        <a href="{% url 'ventes:commande_liste' %}?statut=BON_DE_COMMANDE" class="small text-decoration-none">Tout voir</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Référence</th><th>Client</th><th>Date</th><th></th></tr></thead>
+          <tbody>
+            {% for c in bons_attente %}
+            <tr><td class="fw-semibold">{{ c.reference }}</td><td>{{ c.client.nom }}</td>
+              <td>{{ c.date|date:"d/m/Y" }}</td>
+              <td class="text-end"><a href="{% url 'ventes:commande_detail' c.pk %}" class="btn btn-sm btn-outline-primary">Ouvrir</a></td></tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-muted-2 py-4">Aucun bon en attente.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-receipt"></i> Dernières factures</span>
+        <a href="{% url 'ventes:facture_liste' %}" class="small text-decoration-none">Tout voir</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>N°</th><th>Client</th><th class="num">Montant</th><th>Statut</th></tr></thead>
+          <tbody>
+            {% for f in dernieres_factures %}
+            <tr><td><a href="{% url 'ventes:facture_detail' f.pk %}" class="text-decoration-none fw-semibold">{{ f.numero }}</a></td>
+              <td>{{ f.client.nom }}</td><td class="num">{{ f.montant_total|floatformat:0 }}</td>
+              <td>{% if f.annulee %}<span class="badge-soft badge-danger">Annulée</span>
+                  {% elif f.statut_paiement.value == 'PAYEE' %}<span class="badge-soft badge-ok">Payée</span>
+                  {% elif f.statut_paiement.value == 'PARTIELLE' %}<span class="badge-soft badge-attente">Partielle</span>
+                  {% else %}<span class="badge-soft badge-neutre">Non payée</span>{% endif %}</td></tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-muted-2 py-4">Aucune facture.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if sous_seuil %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-exclamation-triangle" style="color:var(--alerte)"></i> Alertes de stock</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Article</th><th class="num">Stock</th><th class="num">Seuil</th></tr></thead>
+      <tbody>
+        {% for a, q in sous_seuil %}
+        <tr><td class="fw-semibold">{{ a.libarticle }}</td>
+          <td class="num" style="color:var(--danger);font-weight:600">{{ q }}</td>
+          <td class="num text-muted-2">{{ a.seuil_alerte }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

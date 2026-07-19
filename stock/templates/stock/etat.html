@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}État du stock{% endblock %}
+{% block page_title %}État du stock{% endblock %}
+{% load monnaie %}
+{% block topbar_actions %}
+  <span class="badge-soft badge-ok" id="liveDot"><i class="bi bi-broadcast"></i> Temps réel</span>
+  <a href="/admin/stock/approvisionnement/add/" class="btn btn-sm btn-olive"><i class="bi bi-truck"></i> Approvisionner</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-sm-4">
+    <div class="kpi"><div class="label">Articles suivis</div>
+      <div class="value">{{ nb_articles }}</div></div>
+  </div>
+  <div class="col-sm-4">
+    <div class="kpi alerte"><div class="label">Sous le seuil d'alerte</div>
+      <div class="value">{{ nb_alerte }}</div>
+      <div class="sub"><a href="?filtre=alerte" class="text-decoration-none">Voir les articles concernés</a></div></div>
+  </div>
+  <div class="col-sm-4">
+    <div class="kpi olive"><div class="label">Valeur du stock (au prix d'achat)</div>
+      <div class="value">{{ valeur_totale|format_money_with_currency}}</div>
+      <div class="sub">FCFA</div></div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-5">
+        <label class="form-label mb-1">Recherche</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Désignation ou code…">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label mb-1">Type</label>
+        <select name="type" class="form-select">
+          <option value="">Tous</option>
+          {% for t in types %}<option value="{{ t.id }}" {% if type_sel == t.id|stringformat:'s' %}selected{% endif %}>{{ t.nom }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-3 d-flex gap-2">
+        {% if filtre == "alerte" %}<input type="hidden" name="filtre" value="alerte">{% endif %}
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+        <a href="{% url 'stock:etat_stock' %}" class="btn btn-outline-secondary">Réinit.</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>{% if filtre == "alerte" %}Articles sous le seuil{% else %}Niveaux de stock{% endif %}</span>
+    <small class="text-muted-2">Actualisé <span id="lastUpdate">à l'instant</span></small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" id="stockTable">
+      <thead>
+        <tr><th>Code</th><th>Désignation</th><th>Conditionnement</th>
+            <th class="num">Stock</th><th class="num">Seuil</th><th class="num">Nombre de Bouteille</th><th>Etat</th></tr>
+      </thead>
+      <tbody>
+        {% for l in lignes %}
+        <tr data-article="{{ l.a.id }}">
+          <td class="text-muted-2">{{ l.a.code }}</td>
+          <td class="fw-semibold">{{ l.a.libarticle }}</td>
+          <td> {{  l.a.unite_base  }}</td>
+          <td class="num js-stock">{{ l.stock }} {{ l.a.type_article.nom }}</td>
+          <td class="num text-muted-2">{{ l.a.seuil_alerte }}</td>
+          <td class="num">{{ l.valeur|floatformat:0 }}</td>
+          <td class="js-etat">
+            {% if l.sous_seuil %}<span class="badge-soft badge-attente">à réapprovisionner</span>
+            {% else %}<span class="badge-soft badge-ok">OK</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted-2 py-4">Aucun article.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer border-0 bg-white">
+    <nav aria-label="Pagination stock">
+      <ul class="pagination justify-content-center mb-0">
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+          <a class="page-link" href="?{% if current_params %}{{ current_params.urlencode }}&{% endif %}page=1">«</a>
+        </li>
+        <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+          {% if page_obj.has_previous %}
+            <a class="page-link" href="?{% if current_params %}{{ current_params.urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">‹</a>
+          {% else %}
+            <span class="page-link">‹</span>
+          {% endif %}
+        </li>
+        {% for num in page_obj.paginator.page_range %}
+          {% if num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
+              {% if num == page_obj.number %}
+                <span class="page-link">{{ num }}</span>
+              {% else %}
+                <a class="page-link" href="?{% if current_params %}{{ current_params.urlencode }}&{% endif %}page={{ num }}">{{ num }}</a>
+              {% endif %}
+            </li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+          {% if page_obj.has_next %}
+            <a class="page-link" href="?{% if current_params %}{{ current_params.urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">›</a>
+          {% else %}
+            <span class="page-link">›</span>
+          {% endif %}
+        </li>
+        <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+          <a class="page-link" href="?{% if current_params %}{{ current_params.urlencode }}&{% endif %}page={{ page_obj.paginator.num_pages }}">»</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Rafraichissement temps reel du stock via l'API DRF (polling toutes les 20 s).
+async function refreshStock(){
+  try {
+    const r = await fetch("{% url 'api:stock-list' %}?limit=1000", {headers: {"Accept":"application/json"}});
+    if(!r.ok) return;
+    const data = await r.json();
+    const items = data.results || data;
+    const map = {};
+    items.forEach(a => map[a.id] = a);
+    document.querySelectorAll("#stockTable tr[data-article]").forEach(tr => {
+      const a = map[tr.dataset.article];
+      if(!a) return;
+      const cell = tr.querySelector(".js-stock");
+      if(cell && cell.textContent.trim() !== String(a.stock_actuel)){
+        cell.textContent = a.stock_actuel;
+        cell.style.transition = "background .1s"; cell.style.background = "#fbe8cf";
+        setTimeout(()=>cell.style.background="", 900);
+      }
+      const etat = tr.querySelector(".js-etat");
+      if(etat){
+        etat.innerHTML = a.sous_seuil
+          ? '<span class="badge-soft badge-attente">à réapprovisionner</span>'
+          : '<span class="badge-soft badge-ok">OK</span>';
+      }
+    });
+    document.getElementById("lastUpdate").textContent =
+      new Date().toLocaleTimeString("fr-FR");
+  } catch(e){ /* silencieux */ }
+}
+setInterval(refreshStock, 20000);
+</script>
+{% endblock %}

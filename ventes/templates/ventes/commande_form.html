@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle commande{% endblock %}
+{% block page_title %}Nouvelle commande{% endblock %}
+{% block topbar_actions %}<a href="{% url 'ventes:commande_liste' %}" class="btn btn-sm btn-outline-secondary">← Annuler</a>{% endblock %}
+
+{% block content %}
+<form method="post" id="commandeForm">{% csrf_token %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Client</div>
+      <div class="card-body">
+        <label class="form-label">Client</label>
+        <select name="client" id="clientSelect" class="form-select" required>
+          <option value="">— Sélectionner —</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}" data-liste="{{ c.liste_tarif.nomtarif }}" {% if client_pre == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nom }} ({{ c.codeclient }})</option>
+          {% endfor %}
+        </select>
+        <div class="form-text" id="listeInfo"></div>
+
+        <div class="form-check mt-3">
+          <input type="checkbox" class="form-check-input" id="appliquerTva" name="appliquer_tva">
+          <label class="form-check-label" for="appliquerTva">Appliquer la TVA (18%)</label>
+        </div>
+
+        <label class="form-label mt-3">Note (optionnel)</label>
+        <textarea name="note" class="form-control" rows="3" placeholder="Remarque…"></textarea>
+      </div>
+      <div class="card-body border-top">
+        <div class="small text-muted-2 mb-2" id="decompteConditionnements"></div>
+        <div class="d-flex justify-content-between small text-muted-2">
+          <span>Nombre de bouteilles</span>
+          <span id="totalBouteilles">0</span>
+        </div>
+        <div class="d-flex justify-content-between small text-muted-2">
+          <span>Montant HT</span>
+          <span id="totalHT">0</span>
+        </div>
+        <div class="d-flex justify-content-between small text-muted-2" id="ligneTva" style="display:none">
+          <span>TVA (18%)</span>
+          <span id="totalTva">0</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-1">
+          <span class="text-muted-2">Total commande</span>
+          <span class="h4 mb-0" style="font-family:Poppins" id="totalGlobal">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Lignes de commande</span>
+        <button type="button" class="btn btn-sm btn-olive" id="btnAdd" disabled><i class="bi bi-plus-lg"></i> Ajouter une ligne</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0" id="lignesTable">
+          <thead><tr><th style="width:38%">Article</th><th style="width:22%">Conditionnement</th>
+            <th style="width:12%" class="num">Qté</th><th style="width:14%" class="num">P.U.</th>
+            <th style="width:14%" class="num">Montant</th><th></th></tr></thead>
+          <tbody id="lignesBody">
+            <tr id="emptyRow"><td colspan="6" class="text-center text-muted-2 py-4">
+              Choisissez d'abord un client, puis ajoutez des lignes.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="mt-3 text-end">
+      <button type="submit" class="btn btn-primary btn-lg" id="btnSave" disabled>
+        <i class="bi bi-save"></i> Enregistrer le bon de commande</button>
+    </div>
+  </div>
+</div>
+</form>
+
+<template id="rowTpl">
+  <tr class="ligne">
+    <td>
+      <select class="form-select form-select-sm sel-article">
+        <option value="">— Article —</option>
+      </select>
+    </td>
+    <td>
+      <select class="form-select form-select-sm sel-cond" name="conditionnement">
+        <option value="">—</option>
+      </select>
+      <input type="hidden" name="article" class="in-article">
+    </td>
+    <td><input type="number" min="1" value="1" class="form-control form-control-sm num in-qte" name="quantite"></td>
+    <td class="num pu">0</td>
+    <td class="num montant fw-semibold">0</td>
+    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-del"><i class="bi bi-x-lg"></i></button></td>
+  </tr>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const tarifsUrl = "{% url 'ventes:ajax_tarifs' %}";
+const TAUX_TVA = 0.18;
+let ARTICLES = [];   // [{article_id, libarticle, conditionnements:[{conditionnement_id,nom,prix,nombre_unites}]}]
+
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n));
+const clientSelect = document.getElementById('clientSelect');
+const appliquerTvaCheckbox = document.getElementById('appliquerTva');
+const btnAdd = document.getElementById('btnAdd');
+const btnSave = document.getElementById('btnSave');
+const body = document.getElementById('lignesBody');
+const emptyRow = document.getElementById('emptyRow');
+
+async function loadTarifs(clientId){
+  ARTICLES = [];
+  body.querySelectorAll('.ligne').forEach(r => r.remove());
+  if(!clientId){ btnAdd.disabled = true; btnSave.disabled = true; recalc(); return; }
+  const r = await fetch(tarifsUrl + "?client=" + clientId);
+  const data = await r.json();
+  ARTICLES = data.articles;
+  // Suggestion par defaut d'apres le client ; reste modifiable par l'utilisateur.
+  appliquerTvaCheckbox.checked = !!data.avectva && !data.exempttva;
+  document.getElementById('listeInfo').textContent = "Liste de tarifs : " + data.liste_tarif;
+  btnAdd.disabled = ARTICLES.length === 0;
+  btnSave.disabled = true;
+  if(ARTICLES.length === 0){
+    document.getElementById('listeInfo').textContent += " — aucun tarif défini pour ce client.";
+  }
+  recalc();
+}
+
+function addRow(){
+  emptyRow.style.display = 'none';
+  const tpl = document.getElementById('rowTpl').content.cloneNode(true);
+  const tr = tpl.querySelector('tr');
+  const selA = tr.querySelector('.sel-article');
+  ARTICLES.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.article_id; o.textContent = a.libarticle;
+    selA.appendChild(o);
+  });
+  selA.addEventListener('change', () => onArticle(tr));
+  tr.querySelector('.sel-cond').addEventListener('change', () => recalcRow(tr));
+  tr.querySelector('.in-qte').addEventListener('input', () => recalcRow(tr));
+  tr.querySelector('.btn-del').addEventListener('click', () => { tr.remove(); recalc(); });
+  body.appendChild(tr);
+  btnSave.disabled = false;
+}
+
+function onArticle(tr){
+  const artId = tr.querySelector('.sel-article').value;
+  tr.querySelector('.in-article').value = artId;
+  const selC = tr.querySelector('.sel-cond');
+  selC.innerHTML = '<option value="">—</option>';
+  const art = ARTICLES.find(a => String(a.article_id) === String(artId));
+  if(art){
+    art.conditionnements.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.conditionnement_id; o.textContent = c.nom;
+      o.dataset.prix = c.prix;
+      o.dataset.unites = c.nombre_unites;
+      selC.appendChild(o);
+    });
+  }
+  recalcRow(tr);
+}
+
+function recalcRow(tr){
+  const opt = tr.querySelector('.sel-cond').selectedOptions[0];
+  const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
+  const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+  tr.querySelector('.pu').textContent = fmt(prix);
+  tr.querySelector('.montant').textContent = fmt(prix * qte);
+  recalc();
+}
+
+function recalc(){
+  let totalHT = 0, totalBouteilles = 0;
+  const decompte = new Map();  // nom conditionnement -> quantite
+  body.querySelectorAll('.ligne').forEach(tr => {
+    const opt = tr.querySelector('.sel-cond').selectedOptions[0];
+    const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
+    const unites = opt && opt.dataset.unites ? parseInt(opt.dataset.unites, 10) : 0;
+    const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+    totalHT += prix * qte;
+    if(opt && opt.value){
+      totalBouteilles += unites * qte;
+      decompte.set(opt.textContent, (decompte.get(opt.textContent) || 0) + qte);
+    }
+  });
+  const appliquerTva = appliquerTvaCheckbox.checked;
+  const tva = appliquerTva ? totalHT * TAUX_TVA : 0;
+  document.getElementById('totalHT').textContent = fmt(totalHT);
+  document.getElementById('totalBouteilles').textContent = fmt(totalBouteilles);
+  document.getElementById('decompteConditionnements').innerHTML = Array.from(decompte.entries())
+    .map(([nom, qte]) => `${nom} : <strong>${qte}</strong>`).join(' &nbsp;·&nbsp; ');
+  const ligneTva = document.getElementById('ligneTva');
+  if(appliquerTva){
+    ligneTva.style.display = '';
+    document.getElementById('totalTva').textContent = fmt(tva);
+  } else {
+    ligneTva.style.display = 'none';
+  }
+  document.getElementById('totalGlobal').textContent = fmt(totalHT + tva);
+  if(body.querySelectorAll('.ligne').length === 0){ emptyRow.style.display = ''; }
+}
+
+clientSelect.addEventListener('change', e => loadTarifs(e.target.value));
+appliquerTvaCheckbox.addEventListener('change', recalc);
+btnAdd.addEventListener('click', addRow);
+document.getElementById('commandeForm').addEventListener('submit', e => {
+  if(body.querySelectorAll('.ligne').length === 0){ e.preventDefault(); alert("Ajoutez au moins une ligne."); }
+});
+// Pre-selection eventuelle (depuis fiche client)
+if(clientSelect.value){ loadTarifs(clientSelect.value); }
+</script>
+{% endblock %}

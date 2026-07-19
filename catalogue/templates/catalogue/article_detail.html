@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ article.designation }}{% endblock %}
+{% block page_title %}Article{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between">
+        <span>{{ article.designation }}</span>
+        <span class="badge-soft {% if article.sous_seuil %}badge-attente{% else %}badge-ok{% endif %}">
+          {{ stock }} {{ article.unite_base }}</span>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Code</dt><dd class="col-7">{{ article.code }}</dd>
+          <dt class="col-5 text-muted-2">Type</dt><dd class="col-7">{{ article.type_article.nom }}</dd>
+          <dt class="col-5 text-muted-2">Unité de base</dt><dd class="col-7">{{ article.unite_base }}</dd>
+          <dt class="col-5 text-muted-2">Seuil d'alerte</dt><dd class="col-7">{{ article.seuil_alerte }}</dd>
+          <dt class="col-5 text-muted-2">Prix d'achat</dt><dd class="col-7">{{ article.prix_achat|floatformat:0 }} / unité</dd>
+          <dt class="col-5 text-muted-2">Conditionnements</dt>
+          <dd class="col-7">{% for c in article.conditionnements.all %}<span class="badge-soft badge-neutre me-1">{{ c.nom }}</span>{% empty %}—{% endfor %}</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Tarifs</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Liste</th><th>Conditionnement</th><th class="num">Prix</th></tr></thead>
+          <tbody>
+            {% for t in tarifs %}
+            <tr><td>{{ t.liste_tarif.nom }}</td><td>{{ t.conditionnement.nom }}</td><td class="num">{{ t.prix_unitaire|floatformat:0 }}</td></tr>
+            {% empty %}<tr><td colspan="3" class="text-center text-muted-2 py-3">Aucun tarif défini.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Derniers mouvements de stock</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Date</th><th>Type</th><th class="num">Qté</th><th>Référence</th></tr></thead>
+          <tbody>
+            {% for m in mouvements %}
+            <tr>
+              <td>{{ m.date|date:"d/m/Y H:i" }}</td>
+              <td>{{ m.get_type_mouvement_display }}</td>
+              <td class="num {% if m.quantite_unites < 0 %}text-danger{% else %}text-success{% endif %}">
+                  {{ m.quantite_unites }}</td>
+              <td class="text-muted-2">{{ m.reference|default:"—" }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="4" class="text-center text-muted-2 py-4">Aucun mouvement.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

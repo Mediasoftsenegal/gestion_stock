@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Importer un inventaire{% endblock %}
+{% block page_title %}Importer un inventaire physique (CSV){% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'stock:inventaire_liste' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Retour</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Fichier de comptage</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="fichier" class="form-label">Fichier CSV</label>
+            <input type="file" id="fichier" name="fichier" class="form-control" accept=".csv,.txt" required>
+          </div>
+          <div class="mb-3">
+            <label for="date" class="form-label">Date de l'inventaire</label>
+            <input type="date" id="date" name="date" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label for="periode" class="form-label">Période</label>
+            <select id="periode" name="periode" class="form-select">
+              {% for valeur, libelle in periodes %}
+                <option value="{{ valeur }}" {% if valeur == "MOIS" %}selected{% endif %}>{{ libelle }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="separateur" class="form-label">Séparateur (optionnel)</label>
+            <input type="text" id="separateur" name="separateur" class="form-control" placeholder="détecté automatiquement (; , ou tabulation)" maxlength="1">
+          </div>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> Analyser le fichier</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Comment ça marche</div>
+      <div class="card-body small text-muted">
+        <ol class="mb-0 ps-3">
+          <li>Le fichier est comparé au catalogue d'articles (rapprochement par libellé).</li>
+          <li>Les articles absents du catalogue sont proposés à la création — vous complétez code, catégorie et prix d'achat.</li>
+          <li>Une fois confirmé, l'inventaire est créé avec, pour chaque article, la quantité physique comptée reprise de la colonne <strong>TOT BTS TTC</strong> du fichier.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -30,4 +30,6 @@ stderr.log
 .vscode/
 .idea/
 Thumbs.db
-desktop.ini
+desktop.inibackup.json
+*.rar
+*.rar

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ liste.nomtarif }}{% endblock %}
+{% block page_title %}Liste de tarifs{% endblock %}
+
+{% block topbar_actions %}
+  {% if peut_gerer %}
+  <a href="{% url 'clients:tarif_modifier' liste.pk %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-pencil"></i> Modifier</a>
+  <form method="post" action="{% url 'clients:tarif_basculer' liste.pk %}" class="d-inline">
+    {% csrf_token %}
+    <button class="btn btn-sm {% if liste.active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
+      {% if liste.active %}<i class="bi bi-slash-circle"></i> Désactiver{% else %}<i class="bi bi-check-circle"></i> Activer{% endif %}
+    </button>
+  </form>
+  {% endif %}
+  {% if peut_gerer_tarifs %}
+  <a href="{% url 'catalogue:tarif_nouveau' %}?liste_tarif={{ liste.pk }}" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> Ajouter un tarif</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">{{ liste.nomtarif }}</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Description</dt><dd class="col-7">{{ liste.description|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Statut</dt>
+          <dd class="col-7">{% if liste.active %}<span class="badge-soft badge-ok">Active</span>{% else %}<span class="badge-soft badge-danger">Inactive</span>{% endif %}</dd>
+          <dt class="col-5 text-muted-2">Clients</dt><dd class="col-7">{{ clients_lies.count }}</dd>
+        </dl>
+        {% if clients_lies %}
+        <hr>
+        <p class="text-muted-2 small mb-1">Clients rattachés</p>
+        <ul class="small mb-0">
+          {% for c in clients_lies %}
+          <li><a href="{% url 'clients:detail' c.pk %}">{{ c.nomclient }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Tarifs par article et conditionnement</div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Prix</th>{% if peut_gerer_tarifs %}<th></th>{% endif %}</tr></thead>
+          <tbody>
+            {% for t in tarifs %}
+            <tr>
+              <td>{{ t.article.libarticle }}</td>
+              <td>{{ t.conditionnement.nom }}</td>
+              <td class="num">{{ t.prix_unitaire|floatformat:0 }}</td>
+              {% if peut_gerer_tarifs %}
+              <td class="text-end">
+                <a href="{% url 'catalogue:tarif_modifier' t.pk %}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-pencil"></i></a>
+              </td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="{% if peut_gerer_tarifs %}4{% else %}3{% endif %}" class="text-center text-muted-2 py-4">Aucun tarif défini pour cette liste.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

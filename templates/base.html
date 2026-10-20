@@ -56,6 +56,8 @@
         <span class="ic"><i class="bi bi-people"></i></span> Clients</a>
       <a class="nav-link {% if actif == 'articles' %}active{% endif %}" href="{% url 'catalogue:article_liste' %}">
         <span class="ic"><i class="bi bi-box-seam"></i></span> Articles</a>
+      <a class="nav-link {% if actif == 'tarifs' %}active{% endif %}" href="{% url 'clients:tarifs_liste' %}">
+        <span class="ic"><i class="bi bi-tags"></i></span> Listes de prix</a>
     </nav>
 
     <div class="sidebar-foot">

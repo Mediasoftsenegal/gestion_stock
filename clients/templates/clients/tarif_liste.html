@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Listes de prix{% endblock %}
+{% block page_title %}Listes de prix et tarifs{% endblock %}
+
+{% block topbar_actions %}
+  {% if peut_gerer %}
+  <a href="{% url 'clients:tarif_nouvelle' %}" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-lg"></i> Nouvelle liste de tarifs</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-sm-8 col-md-6">
+        <label class="form-label mb-1">Recherche</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control"
+               placeholder="Nom ou description…">
+      </div>
+      <div class="col-sm-4 col-md-3 d-flex gap-2">
+        <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
+        <a href="{% url 'clients:tarifs_liste' %}" class="btn btn-outline-secondary">Réinit.</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Listes de tarifs</span>
+    <span class="badge-soft badge-neutre">{{ total }} liste{{ total|pluralize }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr><th>Nom</th><th>Description</th><th>Clients</th><th>Statut</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for l in listes %}
+        <tr>
+          <td><a href="{% url 'clients:tarif_detail' l.pk %}" class="fw-semibold text-decoration-none">{{ l.nomtarif }}</a></td>
+          <td class="text-muted-2">{{ l.description|default:"—"|truncatechars:60 }}</td>
+          <td>{{ l.clients.count }}</td>
+          <td>{% if l.active %}<span class="badge-soft badge-ok">Active</span>{% else %}<span class="badge-soft badge-danger">Inactive</span>{% endif %}</td>
+          <td class="text-end">
+            <a href="{% url 'clients:tarif_detail' l.pk %}" class="btn btn-sm btn-outline-primary">Détail</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted-2 py-4">Aucune liste de tarifs trouvée.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

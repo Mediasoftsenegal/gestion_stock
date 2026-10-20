@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Charger une liste d'articles{% endblock %}
+{% block page_title %}Mise à niveau du catalogue — charger une liste d'articles{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'catalogue:article_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour aux articles</a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Fichier de la nouvelle liste</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" for="fichier">Fichier CSV, TXT ou Excel</label>
+            <input type="file" id="fichier" name="fichier" class="form-control"
+                   accept=".csv,.txt,.xlsx,.xlsm,.xltx" required>
+            <div class="form-text">La première ligne doit contenir les noms de colonnes.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="separateur">Séparateur (CSV, optionnel)</label>
+            <input type="text" id="separateur" name="separateur" class="form-control" maxlength="1"
+                   placeholder="détecté automatiquement ( ; , tabulation | )">
+          </div>
+          <button class="btn btn-primary"><i class="bi bi-upload"></i> Analyser le fichier</button>
+        </form>
+      </div>
+      <div class="card-body border-top small text-muted-2">
+        <i class="bi bi-shield-check"></i> Rien n'est écrit en base à cette étape : vous verrez
+        d'abord le détail de ce qui sera créé et modifié, puis vous confirmerez.
+        Les articles déjà en base et absents du fichier ne sont jamais modifiés.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Colonnes reconnues automatiquement</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Donnée</th><th>Noms de colonnes acceptés</th></tr></thead>
+          <tbody>
+            {% for champ, libelle, candidats in champs %}
+            <tr>
+              <td class="fw-semibold">{{ libelle }}</td>
+              <td class="small text-muted-2">{% for c in candidats %}{{ c }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body border-top small text-muted-2">
+        Un nom de colonne différent ? Vous pourrez faire la correspondance à la main
+        à l'étape suivante. L'article est reconnu par son <strong>code</strong>, à défaut
+        par son <strong>libellé</strong>.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

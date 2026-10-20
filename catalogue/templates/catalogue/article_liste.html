@@ -3,6 +3,7 @@
 {% block page_title %}Articles{% endblock %}
 
 {% block topbar_actions %}
+  <a href="{% url 'catalogue:article_import' %}" class="btn btn-sm btn-olive"><i class="bi bi-upload"></i> Charger une liste d'articles</a>
   <a href="/admin/catalogue/article/add/" class="btn btn-sm btn-primary">
     <i class="bi bi-plus-lg"></i> Nouvel article</a>
 {% endblock %}

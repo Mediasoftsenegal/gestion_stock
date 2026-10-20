@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Aperçu de l'import{% endblock %}
+{% block page_title %}Aperçu avant mise à niveau du catalogue{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'catalogue:article_import' %}" class="btn btn-sm btn-outline-secondary">← Changer de fichier</a>
+{% endblock %}
+
+{% block content %}
+<form method="post">{% csrf_token %}
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between">
+    <span>Correspondance des colonnes — {{ nom_fichier }} ({{ nb_lignes }} ligne{{ nb_lignes|pluralize }})</span>
+    <button type="submit" name="action" value="remap" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-arrow-repeat"></i> Recalculer l'aperçu</button>
+  </div>
+  <div class="card-body">
+    <div class="row g-2">
+      {% for c in champs %}
+      <div class="col-md-3">
+        <label class="form-label small mb-1">{{ c.libelle }}</label>
+        <select name="map_{{ c.nom }}" class="form-select form-select-sm">
+          <option value="">— ignorer —</option>
+          {% for h in entetes %}
+          <option value="{{ h }}" {% if h == c.selection %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+    {% for e in erreurs_mapping %}
+    <div class="alert alert-warning mt-3 mb-0 py-2 small">{{ e }}</div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if not erreurs_mapping %}
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Créations</div>
+    <div class="h3 mb-0" style="font-family:Poppins">{{ stats.creations }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Mises à jour</div>
+    <div class="h3 mb-0" style="font-family:Poppins">{{ stats.mises_a_jour }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Inchangés</div>
+    <div class="h3 mb-0" style="font-family:Poppins">{{ stats.inchanges }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Erreurs</div>
+    <div class="h3 mb-0" style="font-family:Poppins;color:var(--terracotta)">{{ stats.erreurs }}</div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Détail ligne à ligne</div>
+  <div class="table-responsive" style="max-height:520px;overflow:auto">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>#</th><th>Code</th><th>Article</th><th>Action</th><th>Changements</th><th>Tarif</th></tr></thead>
+      <tbody>
+        {% for r in resultats %}
+        <tr>
+          <td class="text-muted-2">{{ r.numero }}</td>
+          <td>{{ r.code|default:"—" }}</td>
+          <td class="fw-semibold">{{ r.libelle }}</td>
+          <td>
+            {% if r.action == 'creation' %}<span class="badge-soft badge-ok">Création</span>
+            {% elif r.action == 'maj' %}<span class="badge-soft badge-attente">Mise à jour</span>
+            {% elif r.action == 'erreur' %}<span class="badge-soft badge-danger">Erreur</span>
+            {% else %}<span class="badge-soft badge-neutre">Inchangé</span>{% endif %}
+          </td>
+          <td class="small">
+            {% for m in r.modifications %}
+              <div><span class="text-muted-2">{{ m.champ }} :</span> {{ m.avant }} → <strong>{{ m.apres }}</strong></div>
+            {% empty %}<span class="text-muted-2">—</span>{% endfor %}
+            {% for e in r.erreurs %}<div style="color:var(--terracotta)">{{ e }}</div>{% endfor %}
+          </td>
+          <td class="small">
+            {% if r.tarif %}{{ r.tarif.conditionnement }} ({{ r.tarif.nombre_unites }}) :
+              <strong>{{ r.tarif.prix|floatformat:0 }}</strong><br>
+              <span class="text-muted-2">{{ r.tarif.liste_tarif }}</span>
+            {% else %}<span class="text-muted-2">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted-2 py-4">Aucune ligne exploitable.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Appliquer</div>
+  <div class="card-body">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="creerNouveaux" name="creer_nouveaux" checked>
+      <label class="form-check-label" for="creerNouveaux">Créer les articles absents de la base ({{ stats.creations }})</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="majExistants" name="mettre_a_jour" checked>
+      <label class="form-check-label" for="majExistants">Mettre à jour les articles existants ({{ stats.mises_a_jour }})</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="tarifs" name="appliquer_tarifs" checked>
+      <label class="form-check-label" for="tarifs">Enregistrer les prix par conditionnement ({{ stats.tarifs }})</label>
+    </div>
+    <div class="form-text mb-3">Les articles de la base absents du fichier ne sont pas modifiés.</div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="appliquer" class="btn btn-primary"
+              onclick="return confirm('Appliquer la mise à niveau du catalogue ?')">
+        <i class="bi bi-check2-circle"></i> Appliquer au catalogue</button>
+      <button type="submit" name="action" value="annuler" class="btn btn-outline-danger">Annuler l'import</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+</form>
+{% endblock %}

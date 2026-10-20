@@ -61,11 +61,39 @@
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Quantité (TOT BTS TTC) <span class="text-danger">*</span></label>
+        <label class="form-label">Quantité (TOT BTS TTC){% if not mode_carton %} <span class="text-danger">*</span>{% endif %}</label>
         <select name="map_quantite" class="form-select form-select-sm">
           <option value="">—</option>
           {% for h in entetes %}
             <option value="{{ h }}" {% if h == mapping.quantite %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+        <small class="text-muted">Ignorée si une colonne carton/bouteilles ci-dessous est choisie.</small>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Conditionnement</label>
+        <select name="map_conditionnement" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.conditionnement %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Quantité (casier / carton / pack)</label>
+        <select name="map_quantite_carton" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.quantite_carton %}selected{% endif %}>{{ h }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Nombre de bouteilles</label>
+        <select name="map_nombre_bouteilles" class="form-select form-select-sm">
+          <option value="">—</option>
+          {% for h in entetes %}
+            <option value="{{ h }}" {% if h == mapping.nombre_bouteilles %}selected{% endif %}>{{ h }}</option>
           {% endfor %}
         </select>
       </div>
@@ -76,6 +104,14 @@
   </div>
 </div>
 
+{% if a_conditionner %}
+  <div class="alert alert-warning">
+    <strong>Conditionnement à préciser :</strong> {{ a_conditionner|length }} ligne(s) ont une quantité de
+    casier/carton/pack mais une valeur de conditionnement absente du catalogue. Choisissez le conditionnement
+    correspondant dans le tableau ci-dessous avant de confirmer.
+  </div>
+{% endif %}
+
 {% if not erreurs_mapping %}
 <form method="post">
   {% csrf_token %}
@@ -83,34 +119,57 @@
 
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span>Comparaison au catalogue — {{ date|date:"d/m/Y" }} ({{ periode }})</span>
+      <span>
+        Comparaison au catalogue — {{ date|date:"d/m/Y" }} ({{ periode }})
+        {% if inventaire_id %}
+          <span class="badge-soft badge-attente">complète un inventaire existant</span>
+        {% endif %}
+      </span>
       <span>
         <span class="badge-soft badge-ok">{{ trouvees }} trouvé(s)</span>
         <span class="badge-soft badge-attente">{{ manquantes|length }} à créer</span>
+        <span class="badge-soft" id="selection_count"></span>
       </span>
     </div>
     <div class="table-responsive">
       <table class="table table-hover table-sm mb-0">
         <thead>
           <tr>
+            <th><input type="checkbox" id="select_all" checked title="Tout sélectionner / désélectionner"></th>
             <th>Libellé (CSV)</th>
             <th>Statut</th>
             <th>Code</th>
             <th>Catégorie</th>
             <th class="num">Prix d'achat</th>
-            <th class="num">Qté physique (TOT BTS TTC)</th>
+            {% if mode_carton %}
+              <th>Conditionnement</th>
+              <th class="num">Qté (casier/carton/pack)</th>
+              <th class="num">Nb bouteilles</th>
+              <th class="num">Total bts</th>
+            {% else %}
+              <th class="num">Qté physique (TOT BTS TTC)</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
-          {% for l in lignes_analysees %}
-          <tr>
+          {% for categorie, groupe in lignes_par_categorie.items %}
+          <tr class="table-light">
+            <td colspan="{% if mode_carton %}10{% else %}7{% endif %}" class="fw-semibold">
+              {{ categorie }} <span class="text-muted small">({{ groupe|length }} article(s))</span>
+            </td>
+          </tr>
+          {% for l in groupe %}
+          <tr{% if mode_carton %} data-unites-conditionnement="{{ l.conditionnement.nombre_unites|default:'' }}"{% endif %}>
+            <td>
+              <input type="checkbox" name="select_{{ l.index }}" class="select-produit"
+                     {% if l.selectionnee %}checked{% endif %}>
+            </td>
             <td>{{ l.libelle }}</td>
             {% if l.article %}
               <td><span class="badge-soft badge-ok">trouvé</span></td>
               <td>{{ l.article.code }}</td>
               <td>{{ l.article.categorie_articles|default:"—" }}</td>
               <td class="num">{{ l.article.prix_achat|format_money_with_currency }}</td>
-              <td class="num">{{ l.quantite }}</td>
             {% else %}
               <td><span class="badge-soft badge-attente">à créer</span></td>
               <td>
@@ -134,11 +193,51 @@
                 <input type="number" step="0.01" name="prix_{{ l.index }}" class="form-control form-control-sm"
                        value="{{ l.prix_saisi|default:l.prix_achat|stringformat:'s' }}">
               </td>
+            {% endif %}
+
+            {% if mode_carton %}
+              <td>
+                {% if l.conditionnement %}
+                  {{ l.conditionnement.nom }}
+                {% elif l.quantite_carton %}
+                  <select name="cond_{{ l.index }}" class="form-select form-select-sm cond-select">
+                    <option value="">— choisir —</option>
+                    {% for c in conditionnements %}
+                      <option value="{{ c.id }}" data-unites="{{ c.nombre_unites }}"
+                        {% if l.conditionnement_id_saisi == c.id|stringformat:"s" %}selected{% endif %}>
+                        {{ c.nom }} ({{ c.nombre_unites }})
+                      </option>
+                    {% endfor %}
+                    <option value="nouveau" data-unites=""
+                      {% if l.conditionnement_id_saisi == "nouveau" %}selected{% endif %}>
+                      + Nouveau conditionnement…
+                    </option>
+                  </select>
+                  <div class="nouveau-cond-fields mt-1"
+                       style="{% if l.conditionnement_id_saisi != 'nouveau' %}display:none;{% endif %}">
+                    <input type="text" name="cond_nom_{{ l.index }}" class="form-control form-control-sm mb-1"
+                           placeholder="Nom (ex : Casier)"
+                           value="{{ l.cond_nom_saisi|default:l.conditionnement_raw }}">
+                    <input type="number" min="1" name="cond_unites_{{ l.index }}" class="form-control form-control-sm cond-unites-input"
+                           placeholder="Nb bouteilles / unité" value="{{ l.cond_unites_saisi|default:'' }}">
+                  </div>
+                  {% if l.conditionnement_raw %}
+                    <small class="text-danger d-block">« {{ l.conditionnement_raw }} » inconnue du catalogue</small>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="num carton-cell" data-qte="{{ l.quantite_carton }}">{{ l.quantite_carton }}</td>
+              <td class="num bouteilles-cell" data-qte="{{ l.nombre_bouteilles_saisi }}">{{ l.nombre_bouteilles_saisi }}</td>
+              <td class="num fw-semibold total-bts-cell">{{ l.quantite }}</td>
+            {% else %}
               <td class="num">{{ l.quantite }}</td>
             {% endif %}
           </tr>
+          {% endfor %}
           {% empty %}
-          <tr><td colspan="6" class="text-center text-muted-2 py-4">Aucune ligne exploitable dans le fichier.</td></tr>
+          <tr><td colspan="{% if mode_carton %}10{% else %}7{% endif %}" class="text-center text-muted-2 py-4">Aucune ligne exploitable dans le fichier.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -146,8 +245,8 @@
   </div>
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-success" {% if not lignes_analysees %}disabled{% endif %}>
-      <i class="bi bi-check2-circle"></i> Confirmer et importer
+    <button type="submit" class="btn btn-success" id="btn_confirmer" {% if not lignes_analysees %}disabled{% endif %}>
+      <i class="bi bi-check2-circle"></i> Confirmer et importer la sélection
     </button>
   </div>
 </form>
@@ -160,3 +259,66 @@
 {% endif %}
 
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  // --- Selection des produits a importer ---
+  const selectAll = document.getElementById("select_all");
+  const checkboxes = Array.from(document.querySelectorAll(".select-produit"));
+  const compteur = document.getElementById("selection_count");
+  const btnConfirmer = document.getElementById("btn_confirmer");
+
+  function majCompteur() {
+    const nb = checkboxes.filter((c) => c.checked).length;
+    if (compteur) compteur.textContent = nb + " sélectionné(s)";
+    if (btnConfirmer) btnConfirmer.disabled = nb === 0;
+    if (selectAll) {
+      selectAll.checked = nb === checkboxes.length && checkboxes.length > 0;
+      selectAll.indeterminate = nb > 0 && nb < checkboxes.length;
+    }
+  }
+  if (selectAll) {
+    selectAll.addEventListener("change", function () {
+      checkboxes.forEach((c) => { c.checked = selectAll.checked; });
+      majCompteur();
+    });
+  }
+  checkboxes.forEach((c) => c.addEventListener("change", majCompteur));
+  majCompteur();
+
+  // --- Recalcule "Total bts" en direct quand un conditionnement est choisi
+  // (existant ou nouveau) pour une ligne dont la valeur du CSV n'a pas été reconnue. ---
+  document.querySelectorAll(".cond-select").forEach(function (select) {
+    const row = select.closest("tr");
+    const totalCell = row ? row.querySelector(".total-bts-cell") : null;
+    const bouteillesCell = row ? row.querySelector(".bouteilles-cell") : null;
+    const cartonCell = row ? row.querySelector(".carton-cell") : null;
+    const nouveauFields = row ? row.querySelector(".nouveau-cond-fields") : null;
+    const uniteInput = nouveauFields ? nouveauFields.querySelector(".cond-unites-input") : null;
+    if (!totalCell || !bouteillesCell) return;
+    const nbBouteilles = parseInt(bouteillesCell.getAttribute("data-qte") || "0", 10) || 0;
+    const nbCartons = cartonCell ? (parseInt(cartonCell.getAttribute("data-qte") || "0", 10) || 0) : 0;
+
+    function recalcul() {
+      let unites = 0;
+      if (select.value === "nouveau") {
+        unites = uniteInput ? (parseInt(uniteInput.value || "0", 10) || 0) : 0;
+      } else {
+        const opt = select.selectedOptions[0];
+        unites = opt ? (parseInt(opt.getAttribute("data-unites") || "0", 10) || 0) : 0;
+      }
+      totalCell.textContent = unites * nbCartons + nbBouteilles;
+    }
+
+    select.addEventListener("change", function () {
+      if (nouveauFields) {
+        nouveauFields.style.display = select.value === "nouveau" ? "" : "none";
+      }
+      recalcul();
+    });
+    if (uniteInput) uniteInput.addEventListener("input", recalcul);
+  });
+})();
+</script>
+{% endblock extra_js %}

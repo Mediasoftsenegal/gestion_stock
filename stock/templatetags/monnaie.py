@@ -22,3 +22,13 @@ def format_money_with_currency(value):
     except (TypeError, ValueError):
         return ""
     return "{:,.0f}".format(amount).replace(",", " ")
+
+
+@register.filter
+def format_money_without_decimal(value):
+    """1500000.50 -> 1 500 001 (espace en separateur de milliers, sans decimales)."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "0"
+    return "{:,.0f}".format(amount).replace(",", " ")

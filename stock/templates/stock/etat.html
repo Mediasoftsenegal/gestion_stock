@@ -57,22 +57,36 @@
     <table class="table table-hover mb-0" id="stockTable">
       <thead>
         <tr><th>Code</th><th>Désignation</th><th>Conditionnement</th>
-            <th class="num">Stock</th><th class="num">Seuil</th><th class="num">Nombre de Bouteille</th><th>Etat</th></tr>
+            <th class="num">Stock</th><th class="num">Prix d'achat</th><th class="num">Valeur en stock</th><th>Etat</th></tr>
       </thead>
       <tbody>
-        {% for l in lignes %}
+        {% for section in sections %}
+        <tr class="{% if section.en_stock %}table-success{% else %}table-secondary{% endif %}">
+          <td colspan="7" class="fw-bold">
+            {{ section.titre }} <span class="small fw-normal">({{ section.nb }} article(s))</span>
+          </td>
+        </tr>
+        {% for type_nom, groupe in section.groupes %}
+        <tr class="table-light">
+          <td colspan="7" class="fw-semibold ps-4">
+            {{ type_nom }} <span class="text-muted small">({{ groupe|length }})</span>
+          </td>
+        </tr>
+        {% for l in groupe %}
         <tr data-article="{{ l.a.id }}">
           <td class="text-muted-2">{{ l.a.code }}</td>
           <td class="fw-semibold">{{ l.a.libarticle }}</td>
           <td> {{  l.a.unite_base  }}</td>
-          <td class="num js-stock">{{ l.stock }} {{ l.a.type_article.nom }}</td>
-          <td class="num text-muted-2">{{ l.a.seuil_alerte }}</td>
-          <td class="num">{{ l.valeur|floatformat:0 }}</td>
+          <td class="num js-stock">{{ l.stock }}&nbsp;{{ l.a.unite_base }}</td>
+          <td class="num text-muted-2">{{ l.a.prix_achat }} F CFA </td>
+          <td class="num">{{ l.valeur|format_money_without_decimal }} F CFA</td>
           <td class="js-etat">
             {% if l.sous_seuil %}<span class="badge-soft badge-attente">à réapprovisionner</span>
             {% else %}<span class="badge-soft badge-ok">OK</span>{% endif %}
           </td>
         </tr>
+        {% endfor %}
+        {% endfor %}
         {% empty %}
         <tr><td colspan="7" class="text-center text-muted-2 py-4">Aucun article.</td></tr>
         {% endfor %}

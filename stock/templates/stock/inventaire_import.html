@@ -15,20 +15,32 @@
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           <div class="mb-3">
+            <label for="inventaire_id" class="form-label">Inventaire</label>
+            <select id="inventaire_id" name="inventaire_id" class="form-select">
+              <option value="">— Nouvel inventaire —</option>
+              {% for inv in inventaires_en_cours %}
+                <option value="{{ inv.id }}">{{ inv.reference }} — {{ inv.date|date:"d/m/Y" }} ({{ inv.get_periode_display }}) — non validé</option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Choisissez un inventaire non validé pour y ajouter ce fichier (import en plusieurs étapes, ex. par catégorie).</small>
+          </div>
+          <div class="mb-3">
             <label for="fichier" class="form-label">Fichier CSV</label>
             <input type="file" id="fichier" name="fichier" class="form-control" accept=".csv,.txt" required>
           </div>
-          <div class="mb-3">
-            <label for="date" class="form-label">Date de l'inventaire</label>
-            <input type="date" id="date" name="date" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label for="periode" class="form-label">Période</label>
-            <select id="periode" name="periode" class="form-select">
-              {% for valeur, libelle in periodes %}
-                <option value="{{ valeur }}" {% if valeur == "MOIS" %}selected{% endif %}>{{ libelle }}</option>
-              {% endfor %}
-            </select>
+          <div id="champs_nouvel_inventaire">
+            <div class="mb-3">
+              <label for="date" class="form-label">Date de l'inventaire</label>
+              <input type="date" id="date" name="date" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="periode" class="form-label">Période</label>
+              <select id="periode" name="periode" class="form-select">
+                {% for valeur, libelle in periodes %}
+                  <option value="{{ valeur }}" {% if valeur == "MOIS" %}selected{% endif %}>{{ libelle }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <div class="mb-3">
             <label for="separateur" class="form-label">Séparateur (optionnel)</label>
@@ -44,12 +56,32 @@
       <div class="card-header">Comment ça marche</div>
       <div class="card-body small text-muted">
         <ol class="mb-0 ps-3">
-          <li>Le fichier est comparé au catalogue d'articles (rapprochement par libellé).</li>
+          <li>Le fichier est comparé au catalogue d'articles (rapprochement par libellé), et les lignes sont regroupées par catégorie à l'écran suivant.</li>
           <li>Les articles absents du catalogue sont proposés à la création — vous complétez code, catégorie et prix d'achat.</li>
-          <li>Une fois confirmé, l'inventaire est créé avec, pour chaque article, la quantité physique comptée reprise de la colonne <strong>TOT BTS TTC</strong> du fichier.</li>
+          <li>Une fois confirmé, l'inventaire est créé (ou complété, si vous en avez choisi un ci-contre) avec, pour chaque article, la quantité physique comptée reprise de la colonne <strong>TOT BTS TTC</strong> du fichier — ou calculée automatiquement si vous mappez plutôt les colonnes <strong>conditionnement</strong>, <strong>casier/carton/pack</strong> et <strong>bouteilles</strong> à l'étape suivante.</li>
+          <li>Tant qu'un inventaire n'est pas validé, vous pouvez y importer d'autres fichiers (une catégorie à la fois par exemple) : les articles déjà comptés sont simplement mis à jour.</li>
         </ol>
       </div>
     </div>
   </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const select = document.getElementById("inventaire_id");
+  const champsNouveau = document.getElementById("champs_nouvel_inventaire");
+  const dateInput = document.getElementById("date");
+  if (!select || !champsNouveau) return;
+
+  function maj() {
+    const continu = !!select.value;
+    champsNouveau.style.display = continu ? "none" : "";
+    if (dateInput) dateInput.required = !continu;
+  }
+  select.addEventListener("change", maj);
+  maj();
+})();
+</script>
+{% endblock extra_js %}

@@ -13,7 +13,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 
-from catalogue.models import Article, Conditionnement, categorie_article
+from catalogue.models import Article, Conditionnement, TypeArticle, categorie_article
 from core.utils import PERIODES, reessayer_si_conflit_bd
 
 from .models import (
@@ -64,6 +64,18 @@ CHAMPS_CSV_INVENTAIRE = {
     "categorie": ["LIQUIDE", "CATEGORIE", "CATEGORIE ARTICLE", "CATEGORIES ARTICLES"],
     "prix_achat": ["PRIX ACHAT"],
     "quantite": ["TOT BTS TTC"],
+    # Colonnes optionnelles : import detaille par conditionnement (casier/carton/pack)
+    # + bouteilles au detail. Si l'une des deux est mappee, elle prend le pas sur
+    # la colonne "quantite" (total deja calcule) ci-dessus.
+    "conditionnement": ["CONDITIONNEMENT", "COND", "EMBALLAGE", "COLISAGE"],
+    "quantite_carton": [
+        "NBRE CARTON", "NOMBRE CARTON", "QTE CARTON", "QUANTITE CARTON",
+        "NBRE CASIER", "QTE CASIER", "CASIER", "CARTON", "PACK", "NBRE PACK",
+    ],
+    "nombre_bouteilles": [
+        "NBRE BOUTEILLE", "NOMBRE BOUTEILLE", "QTE BOUTEILLE", "NBRE BTS DETAIL",
+        "BOUTEILLES", "BOUTEILLE",
+    ],
 }
 
 
@@ -91,7 +103,11 @@ def stock_map():
 
 @login_required
 def etat(request):
-    """Etat du stock en temps reel (rafraichi via l'API)."""
+    """Etat du stock en temps reel (rafraichi via l'API).
+
+    Affichage regroupe par type d'article : d'abord les articles dont le stock
+    est superieur a 0, ensuite le reste (stock nul ou negatif), chaque bloc
+    etant lui-meme regroupe par type d'article."""
     q = request.GET.get("q", "").strip()
     type_sel = request.GET.get("type", "").strip()
     filtre = request.GET.get("filtre", "").strip()  # "alerte" pour sous seuil
@@ -120,9 +136,36 @@ def etat(request):
         lignes.append({"a": a, "stock": s, "sous_seuil": sous,
                        "valeur": (a.prix_achat or Decimal("0")) * s})
 
+    def _nom_type(l):
+        t = l["a"].type_article
+        return t.nom if t else "Sans type"
+
+    # Tri : stock > 0 d'abord, puis par type d'article, puis par libelle.
+    lignes.sort(key=lambda l: (
+        l["stock"] <= 0,
+        _nom_type(l) == "Sans type",
+        _nom_type(l).lower(),
+        l["a"].libarticle.lower(),
+    ))
+
     paginator = Paginator(lignes, 25)
     page_number = request.GET.get("page", "1")
     page_obj = paginator.get_page(page_number)
+
+    # Sections de la page courante : (en stock / stock nul) puis types d'article.
+    sections = []
+    for titre, en_stock in (("En stock", True), ("Stock nul ou épuisé", False)):
+        groupes = {}
+        for l in page_obj.object_list:
+            if (l["stock"] > 0) == en_stock:
+                groupes.setdefault(_nom_type(l), []).append(l)
+        if groupes:
+            sections.append({
+                "titre": titre,
+                "en_stock": en_stock,
+                "nb": sum(len(g) for g in groupes.values()),
+                "groupes": list(groupes.items()),
+            })
 
     params = request.GET.copy()
     params.pop("page", None)
@@ -130,9 +173,10 @@ def etat(request):
     contexte = {
         "actif": "stock",
         "lignes": page_obj.object_list,
+        "sections": sections,
         "page_obj": page_obj,
         "current_params": params,
-        "types": articles.TypeArticle.objects.all(),
+        "types": TypeArticle.objects.all(),
         "q": q, "type_sel": type_sel, "filtre": filtre,
         "valeur_totale": valeur_totale,
         "nb_alerte": nb_alerte,
@@ -228,12 +272,27 @@ SESSION_KEY_IMPORT_INVENTAIRE = "inventaire_import"
 
 @login_required
 def inventaire_import(request):
-    """Etape 1 : upload du CSV d'inventaire physique."""
+    """Etape 1 : upload du CSV d'inventaire physique.
+
+    L'import peut se faire en plusieurs fois : soit en créant un nouvel
+    inventaire, soit en complétant un inventaire existant non encore validé
+    (utile pour charger le fichier catégorie par catégorie, ou en plusieurs
+    fichiers)."""
+    inventaires_en_cours = Inventaire.objects.filter(valide=False).order_by("-date")
+
     if request.method == "POST":
         fichier = request.FILES.get("fichier")
-        date = request.POST.get("date", "").strip()
-        periode = request.POST.get("periode", "MOIS").strip()
         separateur = request.POST.get("separateur", "").strip()
+        inventaire_id = request.POST.get("inventaire_id", "").strip()
+
+        inventaire_existant = None
+        if inventaire_id:
+            inventaire_existant = get_object_or_404(Inventaire, pk=inventaire_id, valide=False)
+            date = inventaire_existant.date.isoformat()
+            periode = inventaire_existant.periode
+        else:
+            date = request.POST.get("date", "").strip()
+            periode = request.POST.get("periode", "MOIS").strip()
 
         if not fichier:
             messages.error(request, "Veuillez sélectionner un fichier CSV.")
@@ -271,12 +330,14 @@ def inventaire_import(request):
             "mapping": mapping,
             "date": date,
             "periode": periode,
+            "inventaire_id": inventaire_existant.id if inventaire_existant else None,
         }
         return redirect("stock:inventaire_import_preview")
 
     return render(request, "stock/inventaire_import.html", {
         "actif": "inventaires",
         "periodes": PERIODES,
+        "inventaires_en_cours": inventaires_en_cours,
     })
 
 
@@ -306,21 +367,39 @@ def inventaire_import_preview(request):
             "categorie": request.POST.get("map_categorie") or None,
             "prix_achat": request.POST.get("map_prix_achat") or None,
             "quantite": request.POST.get("map_quantite") or None,
+            "conditionnement": request.POST.get("map_conditionnement") or None,
+            "quantite_carton": request.POST.get("map_quantite_carton") or None,
+            "nombre_bouteilles": request.POST.get("map_nombre_bouteilles") or None,
         }
         data["mapping"] = mapping
         request.session[SESSION_KEY_IMPORT_INVENTAIRE] = data
         request.session.modified = True
 
+    # Mode "detail" : au moins une des colonnes carton/bouteilles est mappee.
+    # Dans ce cas le Total bts est recalcule ligne a ligne, et la colonne
+    # "quantite" (TOT BTS TTC) n'est plus necessaire.
+    mode_carton = bool(mapping.get("quantite_carton") or mapping.get("nombre_bouteilles"))
+
     erreurs_mapping = []
     if not mapping.get("libelle"):
         erreurs_mapping.append("Choisissez la colonne du libellé article.")
-    if not mapping.get("quantite"):
-        erreurs_mapping.append("Choisissez la colonne de quantité (TOT BTS TTC).")
+    if not mode_carton and not mapping.get("quantite"):
+        erreurs_mapping.append(
+            "Choisissez la colonne de quantité (TOT BTS TTC), ou bien les colonnes "
+            "casier/carton et/ou bouteilles."
+        )
 
     lignes_analysees = []
     manquantes = []
+    a_conditionner = []
     erreurs_confirmation = []
     categories = []
+    conditionnements = []
+    lignes_par_categorie = {}
+
+    # Sur la confirmation, on ne retient que les cases cochées ; sinon (premier
+    # affichage ou apres remap) tout est coche par defaut.
+    selection_soumise = request.method == "POST" and request.POST.get("action") == "confirmer"
 
     if not erreurs_mapping:
         categories = list(categorie_article.objects.all())
@@ -330,11 +409,13 @@ def inventaire_import_preview(request):
         for art in Article.objects.select_related("categorie_articles"):
             articles_par_nom.setdefault(_normaliser_texte(art.libarticle), art)
 
+        conditionnements = list(Conditionnement.objects.all())
+        conditionnements_par_nom = {_normaliser_texte(c.nom): c for c in conditionnements}
+
         for i, row in enumerate(lignes):
             libelle = (row.get(mapping["libelle"]) or "").strip()
             if not libelle:
                 continue
-            quantite = _parser_entier(row.get(mapping["quantite"]))
             prix = (
                 _parser_decimal(row.get(mapping["prix_achat"]))
                 if mapping.get("prix_achat") else Decimal("0")
@@ -349,6 +430,42 @@ def inventaire_import_preview(request):
                 if categorie_raw else None
             )
 
+            conditionnement = None
+            conditionnement_raw = ""
+            quantite_carton = 0
+            nombre_bouteilles_saisi = 0
+
+            if mode_carton:
+                quantite_carton = (
+                    _parser_entier(row.get(mapping["quantite_carton"]))
+                    if mapping.get("quantite_carton") else 0
+                )
+                nombre_bouteilles_saisi = (
+                    _parser_entier(row.get(mapping["nombre_bouteilles"]))
+                    if mapping.get("nombre_bouteilles") else 0
+                )
+                conditionnement_raw = (
+                    (row.get(mapping["conditionnement"]) or "").strip()
+                    if mapping.get("conditionnement") else ""
+                )
+                if conditionnement_raw:
+                    conditionnement = conditionnements_par_nom.get(_normaliser_texte(conditionnement_raw))
+
+                if quantite_carton and not conditionnement:
+                    # On connait le nombre de cartons mais pas leur contenance :
+                    # l'utilisateur devra choisir le conditionnement a l'ecran.
+                    quantite = nombre_bouteilles_saisi
+                else:
+                    facteur = conditionnement.nombre_unites if conditionnement else 1
+                    quantite = quantite_carton * facteur + nombre_bouteilles_saisi
+            else:
+                quantite = _parser_entier(row.get(mapping["quantite"]))
+
+            selectionnee = (
+                request.POST.get(f"select_{i}") is not None
+                if selection_soumise else True
+            )
+
             lignes_analysees.append({
                 "index": i,
                 "libelle": libelle,
@@ -357,13 +474,47 @@ def inventaire_import_preview(request):
                 "categorie_raw": categorie_raw,
                 "categorie_suggeree": categorie_suggeree,
                 "article": article,
+                "mode_carton": mode_carton,
+                "conditionnement_raw": conditionnement_raw,
+                "conditionnement": conditionnement,
+                "quantite_carton": quantite_carton,
+                "nombre_bouteilles_saisi": nombre_bouteilles_saisi,
+                "selectionnee": selectionnee,
             })
 
         manquantes = [l for l in lignes_analysees if not l["article"]]
+        a_conditionner = [
+            l for l in lignes_analysees
+            if l["mode_carton"] and l["quantite_carton"] and not l["conditionnement"]
+        ]
+
+        # Regroupement par categorie pour l'affichage : categorie de l'article
+        # deja au catalogue, sinon categorie suggeree/saisie dans le CSV.
+        def _nom_categorie(l):
+            if l["article"] and l["article"].categorie_articles:
+                return l["article"].categorie_articles.categories_articles
+            if l["categorie_suggeree"]:
+                return l["categorie_suggeree"].categories_articles
+            if l["categorie_raw"]:
+                return l["categorie_raw"]
+            return "Sans catégorie"
+
+        groupes = {}
+        for l in lignes_analysees:
+            groupes.setdefault(_nom_categorie(l), []).append(l)
+        lignes_par_categorie = dict(
+            sorted(groupes.items(), key=lambda kv: (kv[0] == "Sans catégorie", kv[0].lower()))
+        )
 
         if request.method == "POST" and request.POST.get("action") == "confirmer":
+            lignes_a_importer = [l for l in lignes_analysees if l["selectionnee"]]
+            if not lignes_a_importer:
+                erreurs_confirmation.append("Sélectionnez au moins un produit à importer.")
+
             codes_soumis = {}
             for l in manquantes:
+                if not l["selectionnee"]:
+                    continue
                 i = l["index"]
                 code = (request.POST.get(f"code_{i}") or "").strip()
                 l["code_saisi"] = code
@@ -381,10 +532,62 @@ def inventaire_import_preview(request):
                 if Article.objects.filter(code=code).exists():
                     erreurs_confirmation.append(f"Code '{code}' déjà utilisé par un article existant.")
 
+            conditionnements_par_id = {c.id: c for c in conditionnements}
+            for l in a_conditionner:
+                if not l["selectionnee"]:
+                    continue
+                i = l["index"]
+                choix = request.POST.get(f"cond_{i}") or ""
+                l["conditionnement_id_saisi"] = choix
+
+                if choix == "nouveau":
+                    nom_nouveau = (request.POST.get(f"cond_nom_{i}") or "").strip()
+                    unites_str = request.POST.get(f"cond_unites_{i}") or ""
+                    l["cond_nom_saisi"] = nom_nouveau
+                    l["cond_unites_saisi"] = unites_str
+                    unites_nouveau = _parser_entier(unites_str)
+                    if not nom_nouveau or not unites_nouveau:
+                        erreurs_confirmation.append(
+                            f"Renseignez le nom et le nombre d'unités du nouveau conditionnement "
+                            f"pour « {l['libelle']} »."
+                        )
+                        continue
+                    l["cond_nouveau_valide"] = (nom_nouveau, unites_nouveau)
+                    # Apercu ; la creation effective et le calcul definitif se font
+                    # a la confirmation, dans la transaction.
+                    l["quantite"] = l["quantite_carton"] * unites_nouveau + l["nombre_bouteilles_saisi"]
+                elif not choix:
+                    erreurs_confirmation.append(
+                        f"Choisissez ou créez le conditionnement pour « {l['libelle']} » "
+                        f"({l['quantite_carton']} carton(s), valeur '{l['conditionnement_raw'] or '—'}' inconnue)."
+                    )
+                else:
+                    cond = conditionnements_par_id.get(int(choix))
+                    if cond:
+                        l["conditionnement"] = cond
+                        l["quantite"] = l["quantite_carton"] * cond.nombre_unites + l["nombre_bouteilles_saisi"]
+
             if not erreurs_confirmation:
                 with transaction.atomic():
-                    inv = Inventaire.objects.create(date=data["date"], periode=data["periode"])
-                    for l in lignes_analysees:
+                    if data.get("inventaire_id"):
+                        inv = get_object_or_404(Inventaire, pk=data["inventaire_id"], valide=False)
+                    else:
+                        inv = Inventaire.objects.create(date=data["date"], periode=data["periode"])
+                    conditionnements_crees = {}
+                    for l in lignes_a_importer:
+                        nouveau = l.get("cond_nouveau_valide")
+                        if nouveau:
+                            nom_nouveau, unites_nouveau = nouveau
+                            cle = _normaliser_texte(nom_nouveau)
+                            cond = (
+                                conditionnements_crees.get(cle)
+                                or conditionnements_par_nom.get(cle)
+                                or Conditionnement.objects.create(nom=nom_nouveau, nombre_unites=unites_nouveau)
+                            )
+                            conditionnements_crees[cle] = cond
+                            l["conditionnement"] = cond
+                            l["quantite"] = l["quantite_carton"] * cond.nombre_unites + l["nombre_bouteilles_saisi"]
+
                         article = l["article"]
                         if not article:
                             categorie_id = l.get("categorie_id_saisi") or None
@@ -400,10 +603,12 @@ def inventaire_import_preview(request):
                             defaults={"quantite_physique": l["quantite"]},
                         )
                 del request.session[SESSION_KEY_IMPORT_INVENTAIRE]
+                articles_crees = sum(1 for l in lignes_a_importer if not l["article"])
                 messages.success(
                     request,
-                    f"{inv.reference} créé : {len(lignes_analysees)} ligne(s) importée(s), "
-                    f"{len(manquantes)} article(s) créé(s)."
+                    f"{inv.reference} : {len(lignes_a_importer)} ligne(s) importée(s), "
+                    f"{articles_crees} article(s) créé(s). Vous pouvez charger un autre fichier "
+                    f"pour compléter cet inventaire tant qu'il n'est pas validé."
                 )
                 return redirect("stock:inventaire_liste")
 
@@ -411,14 +616,19 @@ def inventaire_import_preview(request):
         "actif": "inventaires",
         "entetes": entetes,
         "mapping": mapping,
+        "mode_carton": mode_carton,
         "erreurs_mapping": erreurs_mapping,
         "erreurs_confirmation": erreurs_confirmation,
         "lignes_analysees": lignes_analysees,
+        "lignes_par_categorie": lignes_par_categorie,
         "manquantes": manquantes,
+        "a_conditionner": a_conditionner,
         "trouvees": len(lignes_analysees) - len(manquantes),
         "categories": categories,
+        "conditionnements": conditionnements,
         "date": data["date"],
         "periode": data["periode"],
+        "inventaire_id": data.get("inventaire_id"),
     })
 
 
@@ -645,52 +855,5 @@ def appro_detail(request, pk):
     
     return render(request, 'stock/appro_detail.html', context)
 
-def etat_stock(request):
-    """Etat du stock avec filtres et recherche."""
-    q = request.GET.get("q", "").strip()
-    type_sel = request.GET.get("type", "").strip()
-    filtre = request.GET.get("filtre", "").strip()  # "alerte" pour sous seuil
-
-    articles = Article.objects.filter(actif=True).select_related("type_article")
-    if q:
-        articles = articles.filter(
-            Q(libarticle__icontains=q) | Q(code__icontains=q)
-        )
-    if type_sel:
-        articles = articles.filter(type_article_id=type_sel)
-    articles = articles.order_by("libarticle")
-
-    smap = stock_map()
-    lignes = []
-    valeur_totale = Decimal("0")
-    nb_alerte = 0
-    for a in articles:
-        s = smap.get(a.id, 0) or 0
-        sous = bool(a.seuil_alerte and s <= a.seuil_alerte)
-        if sous:
-            nb_alerte += 1
-        valeur_totale += (a.prix_achat or Decimal("0")) * s
-        if filtre == "alerte" and not sous:
-            continue
-        lignes.append({"a": a, "stock": s, "sous_seuil": sous,
-                       "valeur": (a.prix_achat or Decimal("0")) * s})
-
-    paginator = Paginator(lignes, 25)
-    page_number = request.GET.get("page", "1")
-    page_obj = paginator.get_page(page_number)
-
-    params = request.GET.copy()
-    params.pop("page", None)
-
-    contexte = {
-        "actif": "etat_stock",
-        "lignes": page_obj.object_list,
-        "page_obj": page_obj,
-        "current_params": params,
-        # "types": Article.type_article.objects.all(),
-        "q": q, "type_sel": type_sel, "filtre": filtre,
-        "valeur_totale": valeur_totale,
-        "nb_alerte": nb_alerte,
-        "nb_articles": articles.count(),
-    }
-    return render(request, "stock/etat.html", contexte)
+# etat_stock : meme vue que etat (routage urls.py).
+etat_stock = etat

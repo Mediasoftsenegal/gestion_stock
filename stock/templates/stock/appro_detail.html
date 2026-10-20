@@ -145,9 +145,9 @@
               <td>{{ l.conditionnement|default:"Unité" }}</td>
               <td class="num">{{ l.quantite }}</td>
               <td class="num fw-semibold">{{ l.nobre_bouteilles }}</td>
-              <td class="num">{{ l.prix_achat|default:"—" }}</td>
+              <td class="num">{% if l.prix_achat %}{{ l.prix_achat|format_money_with_currency }}{% else %}—{% endif %}</td>
               <td class="num">{{ l.remise|floatformat:0 }}%</td>
-              <td class="num">{{ l.montant_ht|floatformat:2 }}</td>
+              <td class="num">{{ l.montant_ht|format_money_with_currency }}</td>
             </tr>
             {% empty %}
             <tr><td colspan="7" class="text-center text-muted py-4">Aucune ligne.</td></tr>

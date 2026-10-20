@@ -29,12 +29,13 @@
   tbody td { padding: 4px 5px; border-bottom: 1px solid #e6ddc7; }
   tfoot td { padding: 3px 5px; }
   tfoot .total td { font-weight: 700; font-size: 10px; border-top: 2px solid #9c2b2b; }
-  tfoot .reliquat td { font-weight: 700; color: #d4622a; }
+  .remise, tbody td.remise, tfoot tr.remise td { color: #d4622a; }
+  .depot { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 3px;
+           background: #f3ead6; color: #9c2b2b; font-size: 7.5px; font-weight: 700;
+           text-transform: uppercase; letter-spacing: .4px; }
   .resume { margin-top: 8px; font-size: 8.5px; }
   .resume .ligne { display: flex; justify-content: space-between; padding: 2px 0; color: #6b6153; }
   .resume .lettres { font-style: italic; margin-top: 4px; color: #6b6153; }
-  .paiements { margin-top: 12px; font-size: 8.5px; }
-  .paiements h3 { font-size: 9px; color: #9c2b2b; margin: 0 0 4px; }
   .pied { margin-top: 16px; font-size: 7.5px; color: #6b6153; text-align: center;
           border-top: 1px solid #e6ddc7; padding-top: 6px; }
   .annulee { color: #b3261e; font-weight: 700; border: 2px solid #b3261e;
@@ -62,8 +63,9 @@
       </div>
     </div>
     <div class="doc-title">
-      <h1>FACTURE</h1>
+      <h1>FACTURE{% if facture.est_depot_vente %} DE SORTIE{% endif %}</h1>
       <div class="num">{{ facture.numero }}</div>
+      {% if facture.est_depot_vente %}<div class="depot">Dépôt-vente</div>{% endif %}
       <div class="date">Émise le {{ facture.date|date:"d/m/Y" }}</div>
       {% if facture.annulee %}<div class="annulee">ANNULÉE</div>{% endif %}
     </div>
@@ -79,29 +81,41 @@
     <div class="bloc">
       <div class="lbl">Référence commande</div>
       <div class="val">{{ facture.commande.reference }}</div>
-      <div class="lbl" style="margin-top:6px">Liste de tarifs</div>
-      <div>{{ facture.commande.liste_tarif.nomtarif }}</div>
     </div>
   </div>
 
   <table>
-    <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th><th class="num">Btl</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+    <colgroup>
+      <col style="width:26%"><col style="width:10%"><col style="width:8%">
+      <col style="width:15%"><col style="width:15%"><col style="width:13%"><col style="width:13%">
+    </colgroup>
+    <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th>
+      <th class="num">P.U.</th><th class="num">Rem. unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
     <tbody>
       {% for l in facture.lignes.all %}
       <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
-        <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
+        <td class="num">{{ l.quantite }}</td>
         <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+        <td class="num">{{ l.remise_unitaire|floatformat:0 }}</td>
+        <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|floatformat:0 }}{% else %}—{% endif %}</td>
         <td class="num">{{ l.montant|floatformat:0 }}</td></tr>
       {% endfor %}
     </tbody>
     <tfoot>
-      <tr><td colspan="5" class="num">Montant HT</td><td class="num">{{ facture.montant_ht|floatformat:0 }}</td></tr>
-      {% if facture.appliquer_tva %}
-      <tr><td colspan="5" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|floatformat:0 }}</td></tr>
+      <tr><td colspan="6" class="num">Montant brut</td><td class="num">{{ facture.montant_brut|floatformat:0 }}</td></tr>
+      {% if facture.montant_remise %}
+      <tr class="remise"><td colspan="6" class="num">Total remises</td><td class="num">- {{ facture.montant_remise|floatformat:0 }}</td></tr>
       {% endif %}
-      <tr class="total"><td colspan="5" class="num">TOTAL</td><td class="num">{{ facture.montant_total|floatformat:0 }} FCFA</td></tr>
-      <tr><td colspan="5" class="num">Payé</td><td class="num">{{ facture.montant_paye|floatformat:0 }}</td></tr>
-      <tr class="reliquat"><td colspan="5" class="num">Reliquat</td><td class="num">{{ facture.reliquat|floatformat:0 }} FCFA</td></tr>
+      {% if facture.retour_valide %}
+      <tr><td colspan="6" class="num">Montant HT facturé</td><td class="num">{{ facture.montant_ht_facture|floatformat:0 }}</td></tr>
+      <tr class="remise"><td colspan="6" class="num">Retour dépôt-vente {{ facture.retour.numero }}</td><td class="num">- {{ facture.montant_retour_ht|floatformat:0 }}</td></tr>
+      {% endif %}
+      <tr><td colspan="6" class="num">Montant HT{% if facture.retour_valide %} dû{% endif %}</td><td class="num">{{ facture.montant_ht|floatformat:0 }}</td></tr>
+      {% if facture.appliquer_tva %}
+      <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|floatformat:0 }}</td></tr>
+      {% endif %}
+      <tr class="total"><td colspan="6" class="num">TOTAL</td><td class="num">{{ facture.montant_total|floatformat:0 }} FCFA</td></tr>
+      <tr><td colspan="6" class="num">Payé</td><td class="num">{{ facture.montant_paye|floatformat:0 }}</td></tr>
     </tfoot>
   </table>
 
@@ -114,24 +128,8 @@
         {% empty %}—{% endfor %}
       </span>
     </div>
-    <div class="ligne"><span>Nombre de bouteilles</span><span>{{ facture.nombre_bouteilles }}</span></div>
     <div class="lettres">Arrêtée à la somme de : {{ facture.montant_en_lettres }}.</div>
   </div>
-
-  {% if facture.paiements.all %}
-  <div class="paiements">
-    <h3>Règlements</h3>
-    <table>
-      <thead><tr><th>Date</th><th>Type</th><th>Mode</th><th class="num">Montant</th></tr></thead>
-      <tbody>
-        {% for p in facture.paiements.all %}
-        <tr><td>{{ p.date|date:"d/m/Y" }}</td><td>{{ p.get_type_paiement_display }}</td>
-          <td>{{ p.get_mode_display }}</td><td class="num">{{ p.montant|floatformat:0 }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
 
   <div class="pied">
     Document généré le {{ now|date:"d/m/Y à H:i" }} · {{ parametrage.nom_entreprise }}{% if parametrage.slogan %} — {{ parametrage.slogan }}{% endif %}

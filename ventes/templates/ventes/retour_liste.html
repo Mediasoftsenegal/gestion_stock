@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Retours dépôt-vente{% endblock %}
+{% block page_title %}Retours dépôt-vente{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Recherche</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="N° retour, n° facture, client…">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Statut</label>
+        <select name="statut" class="form-select">
+          <option value="">— Tous —</option>
+          {% for val, lib in statuts %}
+          <option value="{{ val }}" {% if statut_sel == val %}selected{% endif %}>{{ lib }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3"><button class="btn btn-primary w-100"><i class="bi bi-search"></i> Filtrer</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead><tr><th>N° retour</th><th>Facture de sortie</th><th>Client</th><th>Date</th>
+        <th class="num">Qté facturée</th><th class="num">Qté vendue</th><th class="num">Qté retournée</th>
+        <th class="num">Net à payer</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {% for r in retours %}
+        <tr>
+          <td class="fw-semibold"><a href="{% url 'ventes:retour_detail' r.pk %}">{{ r.numero }}</a></td>
+          <td><a href="{% url 'ventes:facture_detail' r.facture.pk %}">{{ r.facture.numero }}</a></td>
+          <td>{{ r.facture.client.nom }}</td>
+          <td>{{ r.date|date:"d/m/Y" }}</td>
+          <td class="num">{{ r.quantite_facturee_totale }}</td>
+          <td class="num">{{ r.quantite_vendue_totale }}</td>
+          <td class="num" style="color:var(--terracotta)">{{ r.quantite_retournee_totale }}</td>
+          <td class="num fw-semibold">{{ r.montant_vendu_ttc|floatformat:0 }}</td>
+          <td>{% if r.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>
+              {% else %}<span class="badge-soft badge-attente">En saisie</span>{% endif %}</td>
+          <td class="text-end"><a href="{% url 'ventes:retour_calcul' r.pk %}" target="_blank"
+              class="btn btn-sm btn-outline-primary" title="Fenêtre de calcul"><i class="bi bi-calculator"></i></a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted-2 py-4">Aucune facture de retour.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

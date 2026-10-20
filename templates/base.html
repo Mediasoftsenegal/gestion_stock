@@ -34,6 +34,8 @@
         <span class="ic"><i class="bi bi-cart3"></i></span> Commandes</a>
       <a class="nav-link {% if actif == 'factures' %}active{% endif %}" href="{% url 'ventes:facture_liste' %}">
         <span class="ic"><i class="bi bi-receipt"></i></span> Factures</a>
+      <a class="nav-link {% if actif == 'retours' %}active{% endif %}" href="{% url 'ventes:retour_liste' %}">
+        <span class="ic"><i class="bi bi-arrow-return-left"></i></span> Retours dépôt-vente</a>
       <a class="nav-link {% if actif == 'vente_detail' %}active{% endif %}" href="{% url 'ventes:vente_detail_create' %}">
         <span class="ic"><i class="bi bi-upc-scan"></i></span> Vente au détail</a>
       <a class="nav-link {% if actif == 'caisse' %}active{% endif %}" href="{% url 'caisse:liste' %}">

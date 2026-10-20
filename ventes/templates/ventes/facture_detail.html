@@ -36,18 +36,31 @@
         </div>
         <div class="table-responsive">
           <table class="table mb-0">
-            <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+            <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th><th class="num">Btl</th>
+              <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">Remise</th>
+              {% if facture.retour_valide %}<th class="num">Vendu</th><th class="num">Retour</th>{% endif %}
+              <th class="num">Montant</th></tr></thead>
             <tbody>
               {% for l in facture.lignes.all %}
               <tr><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
                 <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
                 <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
+                <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
+                <td class="num" style="color:var(--terracotta)">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>
+                {% if facture.retour_valide %}
+                <td class="num">{{ l.quantite_vendue }}</td>
+                <td class="num" style="color:var(--terracotta)">{{ l.quantite_retournee }}</td>
+                {% endif %}
                 <td class="num fw-semibold">{{ l.montant|format_money_with_currency }}</td></tr>
               {% endfor %}
             </tbody>
             <tfoot>
-              <tr><td colspan="5" class="text-end text-muted-2">Déjà payé</td><td class="num">{{ facture.montant_paye|format_money_with_currency }}</td></tr>
-              <tr><th colspan="5" class="text-end" style="color:var(--terracotta)">Reliquat</th>
+              {% if facture.retour_valide %}
+              <tr><td colspan="{% if facture.retour_valide %}9{% else %}7{% endif %}" class="text-end text-muted-2">Retour dépôt-vente {{ facture.retour.numero }} (HT)</td>
+                <td class="num" style="color:var(--terracotta)">- {{ facture.montant_retour_ht|format_money_with_currency }}</td></tr>
+              {% endif %}
+              <tr><td colspan="{% if facture.retour_valide %}9{% else %}7{% endif %}" class="text-end text-muted-2">Déjà payé</td><td class="num">{{ facture.montant_paye|format_money_with_currency }}</td></tr>
+              <tr><th colspan="{% if facture.retour_valide %}9{% else %}7{% endif %}" class="text-end" style="color:var(--terracotta)">Reliquat</th>
                 <th class="num" style="color:var(--terracotta);font-family:Poppins">{{ facture.reliquat|format_money_with_currency }}</th></tr>
             </tfoot>
           </table>
@@ -66,7 +79,23 @@
           <span>Nombre de bouteilles</span><span>{{ facture.nombre_bouteilles }}</span>
         </div>
         <div class="d-flex justify-content-between text-muted-2">
-          <span>Montant HT</span><span>{{ facture.montant_ht|format_money_with_currency }}</span>
+          <span>Montant brut (avant remise)</span><span>{{ facture.montant_brut|format_money_with_currency }}</span>
+        </div>
+        {% if facture.montant_remise %}
+        <div class="d-flex justify-content-between" style="color:var(--terracotta)">
+          <span>Total remises</span><span>- {{ facture.montant_remise|format_money_with_currency }}</span>
+        </div>
+        {% endif %}
+        {% if facture.retour_valide %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT facturé à la sortie</span><span>{{ facture.montant_ht_facture|format_money_with_currency }}</span>
+        </div>
+        <div class="d-flex justify-content-between" style="color:var(--terracotta)">
+          <span>Retour dépôt-vente (HT)</span><span>- {{ facture.montant_retour_ht|format_money_with_currency }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT{% if facture.retour_valide %} dû (quantités vendues){% endif %}</span><span>{{ facture.montant_ht|format_money_with_currency }}</span>
         </div>
         {% if facture.appliquer_tva %}
         <div class="d-flex justify-content-between text-muted-2">
@@ -107,8 +136,8 @@
         <form method="post" action="{% url 'ventes:encaisser' facture.pk %}">{% csrf_token %}
           <label class="form-label">Montant</label>
           <div class="input-group mb-2">
-            <input type="number" step="1" min="1" max="{{ facture.reliquat|format_money_with_currency }}" name="montant"
-                   value="{{ facture.reliquat|format_money_with_currency }}" class="form-control" required>
+            <input type="number" step="1" min="1" max="{{ facture.reliquat|floatformat:0 }}" name="montant"
+                   value="{{ facture.reliquat|floatformat:0 }}" class="form-control" required>
             <span class="input-group-text">FCFA</span>
           </div>
           <div class="form-text mb-2">Reliquat : {{ facture.reliquat|format_money_with_currency }} — un montant inférieur enregistre un acompte.</div>
@@ -124,6 +153,32 @@
     </div>
     {% elif not facture.annulee and facture.reliquat <= 0 %}
     <div class="alert alert-success"><i class="bi bi-check-circle"></i> Facture entièrement réglée.</div>
+    {% endif %}
+
+    {% if facture.est_depot_vente %}
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-arrow-repeat"></i> Dépôt-vente</div>
+      <div class="card-body">
+        {% if retour %}
+          <div class="small text-muted-2 mb-2">
+            Facture de retour <strong>{{ retour.numero }}</strong> —
+            {% if retour.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>
+            {% else %}<span class="badge-soft badge-attente">En saisie</span>{% endif %}
+          </div>
+          <div class="d-grid gap-2">
+            <a href="{% url 'ventes:retour_detail' retour.pk %}" class="btn btn-olive">
+              <i class="bi bi-pencil-square"></i> {% if retour.statut == 'VALIDEE' %}Voir le retour{% else %}Saisir les quantités vendues{% endif %}</a>
+            <a href="{% url 'ventes:retour_calcul' retour.pk %}" target="_blank" class="btn btn-outline-primary">
+              <i class="bi bi-calculator"></i> Fenêtre de calcul</a>
+          </div>
+        {% elif not facture.annulee %}
+          <p class="small text-muted-2">Ce client est en dépôt-vente : après la facture de sortie, ouvrez la facture de retour pour saisir les quantités vendues. L'écart repart en stock et est déduit du montant dû.</p>
+          <form method="post" action="{% url 'ventes:retour_creer' facture.pk %}">{% csrf_token %}
+            <button class="btn btn-primary w-100"><i class="bi bi-arrow-return-left"></i> Ouvrir la facture de retour</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
     {% endif %}
 
     {% if not facture.annulee and peut_annuler %}

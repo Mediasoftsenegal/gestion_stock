@@ -70,12 +70,15 @@
       <div class="card-header">Lignes</div>
       <div class="table-responsive">
         <table class="table mb-0">
-          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th><th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th>
+            <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
           <tbody>
             {% for l in commande.lignes.all %}
             <tr><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
               <td class="num">{{ l.quantite }}</td><td class="num">{{ l.quantite_unites }}</td>
               <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+              <td class="num">{{ l.remise_unitaire|floatformat:0 }}</td>
+              <td class="num" style="color:var(--terracotta)">{% if l.montant_remise %}- {{ l.montant_remise|floatformat:0 }}{% else %}—{% endif %}</td>
               <td class="num fw-semibold">{{ l.montant|floatformat:0 }}</td></tr>
             {% endfor %}
           </tbody>
@@ -93,6 +96,14 @@
         <div class="d-flex justify-content-between text-muted-2">
           <span>Nombre de bouteilles</span><span>{{ commande.nombre_bouteilles }}</span>
         </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant brut (avant remise)</span><span>{{ commande.montant_brut|floatformat:0 }}</span>
+        </div>
+        {% if commande.montant_remise %}
+        <div class="d-flex justify-content-between" style="color:var(--terracotta)">
+          <span>Total remises</span><span>- {{ commande.montant_remise|floatformat:0 }}</span>
+        </div>
+        {% endif %}
         <div class="d-flex justify-content-between text-muted-2">
           <span>Montant HT</span><span>{{ commande.montant_ht|floatformat:0 }}</span>
         </div>

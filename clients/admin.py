@@ -50,8 +50,8 @@ class ListeTarifAdmin(admin.ModelAdmin):
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
     change_list_template = "admin/clients/client/change_list.html"
-    list_display = ["code_display", "nomclient", "categorie_display", "liste_tarif", "telephone", "actif"]
-    list_filter = ["actif", "liste_tarif"]
+    list_display = ["code_display", "nomclient", "categorie_display", "liste_tarif", "telephone", "depot_vente", "actif"]
+    list_filter = ["actif", "depot_vente", "liste_tarif"]
     search_fields = ["nomclient", "telephone", "email"]
     autocomplete_fields = ["liste_tarif"]
 

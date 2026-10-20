@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% load monnaie %}
+{% block title %}{{ retour.numero }}{% endblock %}
+{% block page_title %}Facture de retour {{ retour.numero }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'ventes:retour_calcul' retour.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-calculator"></i> Fenêtre de calcul</a>
+  <a href="{% url 'ventes:retour_pdf' retour.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-pdf"></i> PDF</a>
+  <a href="{% url 'ventes:facture_detail' retour.facture.pk %}" class="btn btn-sm btn-outline-secondary">← Facture de sortie</a>
+{% endblock %}
+
+{% block content %}
+{% if retour.statut == 'VALIDEE' %}
+<div class="alert alert-success">
+  <i class="bi bi-check2-circle"></i> Retour validé le {{ retour.validee_le|date:"d/m/Y H:i" }}
+  {% if retour.validee_par %}par {{ retour.validee_par.get_full_name|default:retour.validee_par.username }}{% endif %} —
+  {{ retour.unites_retournees_totales }} unité(s) réintégrée(s) en stock.
+</div>
+{% else %}
+<div class="alert alert-warning">
+  <i class="bi bi-pencil-square"></i> Saisissez les quantités réellement vendues par le dépositaire.
+  L'écart avec les quantités facturées repartira en stock à la validation, et le montant dû
+  sera ramené aux seules quantités vendues.
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'ventes:retour_enregistrer' retour.pk %}" id="retourForm">{% csrf_token %}
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span>Rappel des quantités facturées — {{ retour.facture.numero }}</span>
+        {% if retour.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>
+        {% else %}<span class="badge-soft badge-attente">En saisie</span>{% endif %}
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0" id="retourTable">
+          <thead><tr>
+            <th>Article</th><th>Cond.</th>
+            <th class="num">Qté facturée</th><th class="num">P.U.</th><th class="num">Remise unit.</th>
+            <th class="num">Qté vendue</th><th class="num">Qté retournée</th>
+            <th class="num">Montant vendu</th><th class="num">Montant retourné</th>
+          </tr></thead>
+          <tbody>
+            {% for l in calcul.lignes %}
+            <tr class="ligne-retour" data-prixnet="{{ l.prix_net|stringformat:'s' }}" data-facturee="{{ l.quantite_facturee }}" data-unites="{{ l.conditionnement.nombre_unites }}">
+              <td class="fw-semibold">{{ l.article.libarticle }}</td>
+              <td>{{ l.conditionnement.nom }}</td>
+              <td class="num fw-semibold">{{ l.quantite_facturee }}</td>
+              <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+              <td class="num">{{ l.remise_unitaire|floatformat:0 }}</td>
+              <td class="num">
+                {% if retour.modifiable %}
+                <input type="number" class="form-control form-control-sm num in-vendue"
+                       name="vendue_{{ l.ligne.pk }}" min="0" max="{{ l.quantite_facturee }}"
+                       value="{{ l.quantite_vendue }}">
+                {% else %}{{ l.quantite_vendue }}{% endif %}
+              </td>
+              <td class="num qte-retour" style="color:var(--terracotta)">{{ l.quantite_retournee }}</td>
+              <td class="num mt-vendu">{{ l.montant_vendu|floatformat:0 }}</td>
+              <td class="num mt-retour" style="color:var(--terracotta)">{{ l.montant_retourne|floatformat:0 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="fw-semibold">
+              <td colspan="2" class="text-end">Totaux</td>
+              <td class="num">{{ calcul.quantite_facturee_totale }}</td>
+              <td colspan="2"></td>
+              <td class="num" id="totVendue">{{ calcul.quantite_vendue_totale }}</td>
+              <td class="num" id="totRetour" style="color:var(--terracotta)">{{ calcul.quantite_retournee_totale }}</td>
+              <td class="num" id="totMtVendu">{{ calcul.montant_vendu_ht|floatformat:0 }}</td>
+              <td class="num" id="totMtRetour" style="color:var(--terracotta)">{{ calcul.montant_retourne_ht|floatformat:0 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% if retour.modifiable %}
+      <div class="card-body border-top d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-outline-primary"><i class="bi bi-save"></i> Enregistrer la saisie</button>
+        {% if peut_valider %}
+        <button type="submit" formaction="{% url 'ventes:retour_valider' retour.pk %}" class="btn btn-primary"
+                onclick="return confirm('Valider ce retour ? L\'écart repartira en stock et le montant dû sera recalculé.')">
+          <i class="bi bi-check2-circle"></i> Valider le retour</button>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">Dépôt-vente</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-6 text-muted-2">Client</dt><dd class="col-6">{{ retour.facture.client.nom }}</dd>
+          <dt class="col-6 text-muted-2">Facture de sortie</dt>
+          <dd class="col-6"><a href="{% url 'ventes:facture_detail' retour.facture.pk %}">{{ retour.facture.numero }}</a></dd>
+          <dt class="col-6 text-muted-2">Date du retour</dt><dd class="col-6">{{ retour.date|date:"d/m/Y" }}</dd>
+          <dt class="col-6 text-muted-2">Unités reprises</dt><dd class="col-6" id="totUnites">{{ calcul.unites_retournees_totales }}</dd>
+        </dl>
+      </div>
+      <div class="card-body border-top small">
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT facturé</span><span>{{ calcul.montant_facture_ht|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between" style="color:var(--terracotta)">
+          <span>Marchandise reprise (HT)</span><span id="boxMtRetour">- {{ calcul.montant_retourne_ht|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT vendu</span><span id="boxMtVendu">{{ calcul.montant_vendu_ht|floatformat:0 }}</span>
+        </div>
+        {% if retour.facture.appliquer_tva %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>TVA (18%)</span><span id="boxTva">{{ calcul.montant_vendu_tva|floatformat:0 }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="fw-semibold">Net à payer</span>
+          <span class="h4 mb-0" style="font-family:Poppins" id="boxTotal">{{ calcul.montant_vendu_ttc|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2 mt-1">
+          <span>Déjà payé</span><span>{{ calcul.deja_paye|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between fw-semibold" style="color:var(--terracotta)">
+          <span>Reste à payer</span><span id="boxReste">{{ calcul.reste_a_payer|floatformat:0 }}</span>
+        </div>
+        {% if retour.statut == 'VALIDEE' %}
+        <div class="text-muted-2 fst-italic mt-2">Arrêtée à la somme de : {{ retour.montant_en_lettres }}.</div>
+        {% else %}
+        <div class="text-muted-2 fst-italic mt-2">Montants provisoires tant que le retour n'est pas validé.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if retour.decompte_conditionnements_retournes %}
+    <div class="card">
+      <div class="card-header">Conditionnements repris</div>
+      <div class="card-body small text-muted-2">
+        {% for d in retour.decompte_conditionnements_retournes %}
+          {{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %} &nbsp;·&nbsp; {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Recalcul immediat a la saisie : ecart, montants vendus/retournes, net a payer.
+const TVA = {% if retour.facture.appliquer_tva %}0.18{% else %}0{% endif %};
+const DEJA_PAYE = {{ calcul.deja_paye|floatformat:2 }};
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n));
+
+function recalc(){
+  let totVendue = 0, totRetour = 0, totMtVendu = 0, totMtRetour = 0, totUnites = 0;
+  document.querySelectorAll('.ligne-retour').forEach(tr => {
+    const prixNet = parseFloat(tr.dataset.prixnet || '0');
+    const facturee = parseInt(tr.dataset.facturee || '0', 10);
+    const unites = parseInt(tr.dataset.unites || '1', 10);
+    const input = tr.querySelector('.in-vendue');
+    let vendue = input ? parseInt(input.value || '0', 10) : parseInt(tr.querySelector('.num').textContent, 10);
+    if(isNaN(vendue) || vendue < 0) vendue = 0;
+    if(vendue > facturee){ vendue = facturee; if(input) input.value = facturee; }
+    const retournee = facturee - vendue;
+    tr.querySelector('.qte-retour').textContent = retournee;
+    tr.querySelector('.mt-vendu').textContent = fmt(vendue * prixNet);
+    tr.querySelector('.mt-retour').textContent = fmt(retournee * prixNet);
+    totVendue += vendue; totRetour += retournee;
+    totMtVendu += vendue * prixNet; totMtRetour += retournee * prixNet;
+    totUnites += retournee * unites;
+  });
+  const tva = totMtVendu * TVA;
+  const ttc = totMtVendu + tva;
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('totVendue', totVendue); set('totRetour', totRetour);
+  set('totMtVendu', fmt(totMtVendu)); set('totMtRetour', fmt(totMtRetour));
+  set('totUnites', totUnites);
+  set('boxMtVendu', fmt(totMtVendu)); set('boxMtRetour', '- ' + fmt(totMtRetour));
+  set('boxTva', fmt(tva)); set('boxTotal', fmt(ttc));
+  set('boxReste', fmt(ttc - DEJA_PAYE));
+}
+document.querySelectorAll('.in-vendue').forEach(i => i.addEventListener('input', recalc));
+recalc();
+</script>
+{% endblock %}

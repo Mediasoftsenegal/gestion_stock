@@ -51,6 +51,16 @@ class Client(TimeStampedModel):
     liste_tarif = models.ForeignKey(
         ListeTarif, on_delete=models.PROTECT, related_name="clients"
     )
+    depot_vente = models.BooleanField(
+        "Client en depot-vente",
+        default=False,
+        help_text=(
+            "Le client recoit la marchandise en depot : une facture de sortie est "
+            "emise, puis une facture de retour permet de saisir les quantites "
+            "reellement vendues. L'ecart est reintegre en stock et deduit du "
+            "montant du."
+        ),
+    )
 
     actif = models.BooleanField(default=True)
 
@@ -62,7 +72,25 @@ class Client(TimeStampedModel):
     def __str__(self):
         return f"{self.nomclient} ({self.codeclient})"
 
+    def save(self, *args, **kwargs):
+        # Tout client dont le libelle contient "DEPOT VENTE" est marque
+        # automatiquement en depot-vente (la case reste modifiable ensuite).
+        if self.nomclient and "DEPOT VENTE" in self._libelle_normalise():
+            self.depot_vente = True
+        super().save(*args, **kwargs)
+
+    def _libelle_normalise(self):
+        import unicodedata
+
+        texte = unicodedata.normalize("NFKD", self.nomclient or "")
+        texte = "".join(c for c in texte if not unicodedata.combining(c))
+        return " ".join(texte.upper().replace("-", " ").split())
+
     @property
     def nom(self):
         return self.nomclient
+
+    @property
+    def est_depot_vente(self):
+        return bool(self.depot_vente) or "DEPOT VENTE" in self._libelle_normalise()
 

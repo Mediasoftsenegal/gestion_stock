@@ -15,8 +15,27 @@ from catalogue.models import Article, Conditionnement, Tarif
 from clients.models import Client
 from core.utils import PERIODES, reessayer_si_conflit_bd
 
-from .models import Commande, Facture, LigneCommande, Paiement
+from .models import (
+    Commande,
+    Facture,
+    FactureRetour,
+    LigneCommande,
+    LigneFactureRetour,
+    Paiement,
+)
 from .services import client_comptoir, conditionnement_unite, releve_annuel_client, suivi_client
+
+
+def _montant(valeur, defaut=Decimal("0")):
+    """Convertit une saisie utilisateur ('1 500', '1500,50') en Decimal."""
+    if valeur in (None, ""):
+        return defaut
+    texte = str(valeur).replace(" ", "").replace("\u00a0", "").replace(",", ".")
+    try:
+        montant = Decimal(texte)
+    except (InvalidOperation, ValueError):
+        return defaut
+    return montant if montant > 0 else defaut
 
 
 # --------------------------------------------------------------------------- #
@@ -56,6 +75,9 @@ def commande_create(request):
         articles = request.POST.getlist("article")
         conds = request.POST.getlist("conditionnement")
         quantites = request.POST.getlist("quantite")
+        remises = request.POST.getlist("remise")
+        # Aligne la liste des remises sur celle des lignes (champ optionnel).
+        remises += [""] * (len(articles) - len(remises))
 
         client = get_object_or_404(Client, pk=client_id) if client_id else None
         if not client:
@@ -63,8 +85,8 @@ def commande_create(request):
             return redirect("ventes:commande_create")
 
         lignes_valides = [
-            (a, c, qv)
-            for a, c, qv in zip(articles, conds, quantites)
+            (a, c, qv, rm)
+            for a, c, qv, rm in zip(articles, conds, quantites, remises)
             if a and c and qv and qv.isdigit() and int(qv) > 0
         ]
         if not lignes_valides:
@@ -77,12 +99,13 @@ def commande_create(request):
                     client=client, date=timezone.localdate(), note=note,
                     appliquer_tva=appliquer_tva, cree_par=request.user,
                 )
-                for a, c, qv in lignes_valides:
+                for a, c, qv, rm in lignes_valides:
                     ligne = LigneCommande(
                         commande=commande,
                         article_id=int(a),
                         conditionnement_id=int(c),
                         quantite=int(qv),
+                        remise_unitaire=_montant(rm),
                     )
                     ligne.save()  # prix auto depuis la liste de tarifs + garde-fou plancher
             messages.success(
@@ -211,6 +234,8 @@ def facture_detail(request, pk):
         "peut_encaisser": request.user.has_perm("ventes.peut_encaisser"),
         "peut_annuler": request.user.has_perm("ventes.peut_annuler_facture"),
         "modes": Paiement.Mode.choices,
+        "retour": getattr(facture, "retour", None),
+        "peut_valider_retour": request.user.has_perm("ventes.peut_valider_retour"),
     }
     return render(request, "ventes/facture_detail.html", contexte)
 
@@ -522,3 +547,173 @@ def ticket_caisse(request, pk):
         "now": timezone.now(),
     }
     return render(request, "ventes/ticket_caisse.html", contexte)
+
+
+# --------------------------------------------------------------------------- #
+#  Depot-vente : facture de retour (rappel des quantites facturees,
+#  saisie des quantites vendues, reintegration de l'ecart en stock)
+# --------------------------------------------------------------------------- #
+def _retour_complet(pk):
+    return get_object_or_404(
+        FactureRetour.objects.select_related(
+            "facture__client", "facture__commande"
+        ).prefetch_related(
+            "lignes__ligne_facture__article",
+            "lignes__ligne_facture__conditionnement",
+            "facture__paiements",
+        ),
+        pk=pk,
+    )
+
+
+@login_required
+def retour_liste(request):
+    """Toutes les factures de retour (clients en depot-vente)."""
+    statut = request.GET.get("statut", "").strip()
+    q = request.GET.get("q", "").strip()
+    retours = FactureRetour.objects.select_related(
+        "facture", "facture__client"
+    ).prefetch_related("lignes__ligne_facture__conditionnement")
+    if statut:
+        retours = retours.filter(statut=statut)
+    if q:
+        retours = retours.filter(
+            Q(numero__icontains=q)
+            | Q(facture__numero__icontains=q)
+            | Q(facture__client__nomclient__icontains=q)
+        )
+    contexte = {
+        "actif": "retours",
+        "retours": retours.order_by("-date", "-cree_le"),
+        "statuts": FactureRetour.Statut.choices,
+        "statut_sel": statut,
+        "q": q,
+    }
+    return render(request, "ventes/retour_liste.html", contexte)
+
+
+@login_required
+@require_POST
+@reessayer_si_conflit_bd()
+def retour_creer(request, pk):
+    """Ouvre la facture de retour d'une facture de sortie en depot-vente."""
+    facture = get_object_or_404(Facture, pk=pk)
+    try:
+        retour = FactureRetour.creer_pour(facture, user=request.user)
+        messages.success(
+            request,
+            f"Facture de retour {retour.numero} ouverte : saisissez les "
+            f"quantites vendues.",
+        )
+        return redirect("ventes:retour_detail", pk=retour.pk)
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+        return redirect("ventes:facture_detail", pk=pk)
+
+
+@login_required
+def retour_detail(request, pk):
+    """Saisie des quantites vendues + rappel des quantites facturees."""
+    retour = _retour_complet(pk)
+    contexte = {
+        "actif": "retours",
+        "retour": retour,
+        "calcul": retour.detail_calcul(),
+        "peut_valider": request.user.has_perm("ventes.peut_valider_retour"),
+    }
+    return render(request, "ventes/retour_detail.html", contexte)
+
+
+@login_required
+@require_POST
+@reessayer_si_conflit_bd()
+def retour_enregistrer(request, pk):
+    """Enregistre les quantites vendues saisies (sans valider)."""
+    retour = _retour_complet(pk)
+    quantites = {}
+    for ligne in retour.lignes.all():
+        brut = request.POST.get(f"vendue_{ligne.pk}", "").strip()
+        if brut == "":
+            continue
+        if not brut.isdigit():
+            messages.error(request, f"Quantite vendue invalide pour {ligne.article}.")
+            return redirect("ventes:retour_detail", pk=pk)
+        quantites[ligne.pk] = int(brut)
+    try:
+        retour.enregistrer_quantites(quantites, user=request.user)
+        messages.success(request, "Quantites vendues enregistrees.")
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+    return redirect("ventes:retour_detail", pk=pk)
+
+
+@login_required
+@permission_required("ventes.peut_valider_retour", raise_exception=True)
+@require_POST
+@reessayer_si_conflit_bd()
+def retour_valider(request, pk):
+    """Valide le retour : l'ecart repart en stock, la facture de sortie est
+    ramenee aux quantites vendues."""
+    retour = _retour_complet(pk)
+    # On enregistre d'abord la derniere saisie si elle est postee avec le bouton.
+    quantites = {}
+    for ligne in retour.lignes.all():
+        brut = request.POST.get(f"vendue_{ligne.pk}", "").strip()
+        if brut.isdigit():
+            quantites[ligne.pk] = int(brut)
+    try:
+        with transaction.atomic():
+            if quantites:
+                retour.enregistrer_quantites(quantites, user=request.user)
+            retour.valider(user=request.user)
+        messages.success(
+            request,
+            f"Retour {retour.numero} valide : "
+            f"{retour.unites_retournees_totales} unite(s) reintegree(s) en stock. "
+            f"Montant du apres retour : {retour.montant_vendu_ttc:.0f}.",
+        )
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+    return redirect("ventes:retour_detail", pk=pk)
+
+
+@login_required
+def retour_calcul(request, pk):
+    """Fenetre de calcul : detail des quantites facturees / vendues /
+    retournees et des montants pour une facture de depot-vente."""
+    retour = _retour_complet(pk)
+    contexte = {
+        "actif": "retours",
+        "retour": retour,
+        "calcul": retour.detail_calcul(),
+        "fenetre": True,
+    }
+    return render(request, "ventes/retour_calcul.html", contexte)
+
+
+@login_required
+def retour_pdf(request, pk):
+    """Etat d'impression de la facture de retour."""
+    from core.models import Parametrage
+
+    retour = _retour_complet(pk)
+    html = render_to_string(
+        "ventes/retour_pdf.html",
+        {
+            "retour": retour,
+            "calcul": retour.detail_calcul(),
+            "facture": retour.facture,
+            "now": timezone.now(),
+            "parametrage": Parametrage.get_solo(),
+        },
+        request=request,
+    )
+    try:
+        from weasyprint import HTML
+    except ImportError:
+        return HttpResponse(html)
+
+    pdf = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{retour.numero}.pdf"'
+    return resp

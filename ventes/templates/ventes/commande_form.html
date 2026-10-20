@@ -34,6 +34,14 @@
           <span id="totalBouteilles">0</span>
         </div>
         <div class="d-flex justify-content-between small text-muted-2">
+          <span>Montant brut</span>
+          <span id="totalBrut">0</span>
+        </div>
+        <div class="d-flex justify-content-between small" style="color:var(--terracotta)" id="ligneRemise">
+          <span>Remise</span>
+          <span id="totalRemise">0</span>
+        </div>
+        <div class="d-flex justify-content-between small text-muted-2">
           <span>Montant HT</span>
           <span id="totalHT">0</span>
         </div>
@@ -57,11 +65,12 @@
       </div>
       <div class="table-responsive">
         <table class="table mb-0" id="lignesTable">
-          <thead><tr><th style="width:38%">Article</th><th style="width:22%">Conditionnement</th>
-            <th style="width:12%" class="num">Qté</th><th style="width:14%" class="num">P.U.</th>
-            <th style="width:14%" class="num">Montant</th><th></th></tr></thead>
+          <thead><tr><th style="width:30%">Article</th><th style="width:18%">Conditionnement</th>
+            <th style="width:9%" class="num">Qté</th><th style="width:11%" class="num">P.U.</th>
+            <th style="width:11%" class="num">Remise unit.</th><th style="width:11%" class="num">Remise</th>
+            <th style="width:13%" class="num">Montant</th><th></th></tr></thead>
           <tbody id="lignesBody">
-            <tr id="emptyRow"><td colspan="6" class="text-center text-muted-2 py-4">
+            <tr id="emptyRow"><td colspan="8" class="text-center text-muted-2 py-4">
               Choisissez d'abord un client, puis ajoutez des lignes.</td></tr>
           </tbody>
         </table>
@@ -90,6 +99,9 @@
     </td>
     <td><input type="number" min="1" value="1" class="form-control form-control-sm num in-qte" name="quantite"></td>
     <td class="num pu">0</td>
+    <td><input type="number" min="0" step="1" value="0" class="form-control form-control-sm num in-remise" name="remise"
+               title="Remise accordée sur une unité de conditionnement"></td>
+    <td class="num remise-ligne">0</td>
     <td class="num montant fw-semibold">0</td>
     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-del"><i class="bi bi-x-lg"></i></button></td>
   </tr>
@@ -141,6 +153,7 @@ function addRow(){
   selA.addEventListener('change', () => onArticle(tr));
   tr.querySelector('.sel-cond').addEventListener('change', () => recalcRow(tr));
   tr.querySelector('.in-qte').addEventListener('input', () => recalcRow(tr));
+  tr.querySelector('.in-remise').addEventListener('input', () => recalcRow(tr));
   tr.querySelector('.btn-del').addEventListener('click', () => { tr.remove(); recalc(); });
   body.appendChild(tr);
   btnSave.disabled = false;
@@ -168,20 +181,32 @@ function recalcRow(tr){
   const opt = tr.querySelector('.sel-cond').selectedOptions[0];
   const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
   const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+  const inRemise = tr.querySelector('.in-remise');
+  let remise = parseFloat(inRemise.value || '0');
+  if(isNaN(remise) || remise < 0){ remise = 0; inRemise.value = 0; }
+  // La remise ne peut jamais depasser le prix unitaire.
+  if(prix > 0 && remise > prix){ remise = prix; inRemise.value = prix; }
+  inRemise.max = prix || null;
   tr.querySelector('.pu').textContent = fmt(prix);
-  tr.querySelector('.montant').textContent = fmt(prix * qte);
+  tr.querySelector('.remise-ligne').textContent = fmt(remise * qte);
+  tr.querySelector('.montant').textContent = fmt((prix - remise) * qte);
   recalc();
 }
 
 function recalc(){
-  let totalHT = 0, totalBouteilles = 0;
+  let totalHT = 0, totalBrut = 0, totalRemise = 0, totalBouteilles = 0;
   const decompte = new Map();  // nom conditionnement -> quantite
   body.querySelectorAll('.ligne').forEach(tr => {
     const opt = tr.querySelector('.sel-cond').selectedOptions[0];
     const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
     const unites = opt && opt.dataset.unites ? parseInt(opt.dataset.unites, 10) : 0;
     const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
-    totalHT += prix * qte;
+    let remise = parseFloat(tr.querySelector('.in-remise').value || '0');
+    if(isNaN(remise) || remise < 0) remise = 0;
+    if(prix > 0 && remise > prix) remise = prix;
+    totalBrut += prix * qte;
+    totalRemise += remise * qte;
+    totalHT += (prix - remise) * qte;
     if(opt && opt.value){
       totalBouteilles += unites * qte;
       decompte.set(opt.textContent, (decompte.get(opt.textContent) || 0) + qte);
@@ -190,6 +215,9 @@ function recalc(){
   const appliquerTva = appliquerTvaCheckbox.checked;
   const tva = appliquerTva ? totalHT * TAUX_TVA : 0;
   document.getElementById('totalHT').textContent = fmt(totalHT);
+  document.getElementById('totalBrut').textContent = fmt(totalBrut);
+  document.getElementById('totalRemise').textContent = '- ' + fmt(totalRemise);
+  document.getElementById('ligneRemise').style.display = totalRemise > 0 ? '' : 'none';
   document.getElementById('totalBouteilles').textContent = fmt(totalBouteilles);
   document.getElementById('decompteConditionnements').innerHTML = Array.from(decompte.entries())
     .map(([nom, qte]) => `${nom} : <strong>${qte}</strong>`).join(' &nbsp;·&nbsp; ');

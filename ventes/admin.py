@@ -4,8 +4,10 @@ from django.contrib import admin, messages
 from .models import (
     Commande,
     Facture,
+    FactureRetour,
     LigneCommande,
     LigneFacture,
+    LigneFactureRetour,
     Paiement,
 )
 
@@ -63,7 +65,14 @@ class LigneFactureInline(admin.TabularInline):
     model = LigneFacture
     extra = 0
     can_delete = False
-    readonly_fields = ["article", "conditionnement", "quantite", "prix_unitaire", "montant"]
+    readonly_fields = [
+        "article", "conditionnement", "quantite", "prix_unitaire",
+        "remise_unitaire", "montant_remise", "montant",
+    ]
+
+    @admin.display(description="remise")
+    def montant_remise(self, obj):
+        return obj.montant_remise
 
     @admin.display(description="montant")
     def montant(self, obj):
@@ -188,3 +197,102 @@ class PaiementAdmin(admin.ModelAdmin):
         if not obj.cree_par:
             obj.cree_par = request.user
         super().save_model(request, obj, form, change)
+
+
+# --------------------------------------------------------------------------- #
+#  Depot-vente : factures de retour
+# --------------------------------------------------------------------------- #
+class LigneFactureRetourInline(admin.TabularInline):
+    model = LigneFactureRetour
+    extra = 0
+    can_delete = False
+    fields = [
+        "ligne_facture", "quantite_facturee", "quantite_vendue",
+        "quantite_retournee", "unites_retournees", "montant_vendu", "montant_retourne",
+    ]
+    readonly_fields = [
+        "ligne_facture", "quantite_facturee", "quantite_retournee",
+        "unites_retournees", "montant_vendu", "montant_retourne",
+    ]
+
+    @admin.display(description="qte facturee")
+    def quantite_facturee(self, obj):
+        return obj.quantite_facturee
+
+    @admin.display(description="qte retournee")
+    def quantite_retournee(self, obj):
+        return obj.quantite_retournee
+
+    @admin.display(description="unites reprises")
+    def unites_retournees(self, obj):
+        return obj.unites_retournees
+
+    @admin.display(description="montant vendu")
+    def montant_vendu(self, obj):
+        return obj.montant_vendu
+
+    @admin.display(description="montant retourne")
+    def montant_retourne(self, obj):
+        return obj.montant_retourne
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        base = list(self.readonly_fields)
+        if obj and obj.statut == FactureRetour.Statut.VALIDEE:
+            base.append("quantite_vendue")
+        return base
+
+
+@admin.register(FactureRetour)
+class FactureRetourAdmin(admin.ModelAdmin):
+    list_display = [
+        "numero", "facture", "client", "date", "statut",
+        "quantite_vendue_totale", "quantite_retournee_totale", "montant_vendu_ttc",
+    ]
+    list_filter = ["statut", "date"]
+    search_fields = ["numero", "facture__numero", "facture__client__nomclient"]
+    readonly_fields = ["numero", "facture", "statut", "validee_le", "validee_par"]
+    inlines = [LigneFactureRetourInline]
+    actions = ["action_valider"]
+
+    @admin.display(description="client")
+    def client(self, obj):
+        return obj.facture.client
+
+    @admin.display(description="qte vendue")
+    def quantite_vendue_totale(self, obj):
+        return obj.quantite_vendue_totale
+
+    @admin.display(description="qte retournee")
+    def quantite_retournee_totale(self, obj):
+        return obj.quantite_retournee_totale
+
+    @admin.display(description="net a payer")
+    def montant_vendu_ttc(self, obj):
+        return obj.montant_vendu_ttc
+
+    def has_add_permission(self, request):
+        # Un retour nait d'une facture de sortie en depot-vente.
+        return False
+
+    @admin.action(description="Valider le retour (ecart remis en stock)")
+    def action_valider(self, request, queryset):
+        if not request.user.has_perm("ventes.peut_valider_retour"):
+            self.message_user(
+                request, "Vous n'avez pas le droit de valider une facture de retour.",
+                messages.ERROR,
+            )
+            return
+        for retour in queryset:
+            try:
+                retour.valider(user=request.user)
+                self.message_user(
+                    request,
+                    f"{retour.numero} valide : {retour.unites_retournees_totales} unite(s) "
+                    f"remise(s) en stock.",
+                    messages.SUCCESS,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.message_user(request, f"{retour.numero} : {exc}", messages.ERROR)

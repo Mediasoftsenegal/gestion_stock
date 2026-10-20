@@ -46,9 +46,16 @@
         <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
         <td class="num">{{ l.montant|floatformat:0 }}</td>
       </tr>
+      {% if l.montant_remise %}
+      <tr><td colspan="3">dont remise ({{ l.remise_unitaire|floatformat:0 }} x {{ l.quantite }})</td>
+        <td class="num">- {{ l.montant_remise|floatformat:0 }}</td></tr>
+      {% endif %}
       {% endfor %}
     </tbody>
     <tfoot>
+      {% if facture.montant_remise %}
+      <tr><td colspan="3">Total remises</td><td class="num">- {{ facture.montant_remise|floatformat:0 }}</td></tr>
+      {% endif %}
       <tr class="total-row"><td colspan="3">TOTAL</td><td class="num">{{ facture.montant_total|floatformat:0 }}</td></tr>
     </tfoot>
   </table>

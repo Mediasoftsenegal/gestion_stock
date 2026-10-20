@@ -18,6 +18,14 @@ urlpatterns = [
     path("factures/<int:pk>/pdf/", views.facture_pdf, name="facture_pdf"),
     path("factures/<int:pk>/encaisser/", views.encaisser, name="encaisser"),
     path("factures/<int:pk>/annuler/", views.facture_annuler, name="facture_annuler"),
+    # Depot-vente : factures de retour
+    path("retours/", views.retour_liste, name="retour_liste"),
+    path("factures/<int:pk>/retour/creer/", views.retour_creer, name="retour_creer"),
+    path("retours/<int:pk>/", views.retour_detail, name="retour_detail"),
+    path("retours/<int:pk>/enregistrer/", views.retour_enregistrer, name="retour_enregistrer"),
+    path("retours/<int:pk>/valider/", views.retour_valider, name="retour_valider"),
+    path("retours/<int:pk>/calcul/", views.retour_calcul, name="retour_calcul"),
+    path("retours/<int:pk>/pdf/", views.retour_pdf, name="retour_pdf"),
     # Etat de suivi client
     path("suivi-client/", views.suivi_client_view, name="suivi_client"),
     path("suivi-client/annuel/", views.releve_annuel_client_view, name="releve_annuel_client"),

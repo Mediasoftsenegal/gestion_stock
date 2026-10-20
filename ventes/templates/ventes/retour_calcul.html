@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Calcul {{ retour.numero }}{% endblock %}
+{% block page_title %}Fenêtre de calcul — {{ retour.numero }}{% endblock %}
+{% block topbar_actions %}
+  <button onclick="window.print()" class="btn btn-sm btn-outline-primary"><i class="bi bi-printer"></i> Imprimer</button>
+  <a href="{% url 'ventes:retour_detail' retour.pk %}" class="btn btn-sm btn-outline-secondary">← Retour à la saisie</a>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row small">
+      <div class="col-md-3"><span class="text-muted-2">Client :</span> <strong>{{ calcul.client.nom }}</strong></div>
+      <div class="col-md-3"><span class="text-muted-2">Facture de sortie :</span>
+        <a href="{% url 'ventes:facture_detail' calcul.facture.pk %}">{{ calcul.facture.numero }}</a></div>
+      <div class="col-md-3"><span class="text-muted-2">Facture de retour :</span> <strong>{{ retour.numero }}</strong></div>
+      <div class="col-md-3"><span class="text-muted-2">Statut :</span>
+        {% if retour.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>
+        {% else %}<span class="badge-soft badge-attente">En saisie (provisoire)</span>{% endif %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Détail du calcul par article</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr>
+        <th>Article</th><th>Cond.</th>
+        <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">P.U. net</th>
+        <th class="num">Qté facturée</th><th class="num">Montant facturé</th>
+        <th class="num">Qté vendue</th><th class="num">Montant vendu</th>
+        <th class="num">Qté retournée</th><th class="num">Unités en stock</th><th class="num">Montant retourné</th>
+      </tr></thead>
+      <tbody>
+        {% for l in calcul.lignes %}
+        <tr>
+          <td class="fw-semibold">{{ l.article.libarticle }}</td>
+          <td>{{ l.conditionnement.nom }}</td>
+          <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
+          <td class="num">{{ l.remise_unitaire|floatformat:0 }}</td>
+          <td class="num">{{ l.prix_net|floatformat:0 }}</td>
+          <td class="num">{{ l.quantite_facturee }}</td>
+          <td class="num">{{ l.montant_facture|floatformat:0 }}</td>
+          <td class="num fw-semibold">{{ l.quantite_vendue }}</td>
+          <td class="num fw-semibold">{{ l.montant_vendu|floatformat:0 }}</td>
+          <td class="num" style="color:var(--terracotta)">{{ l.quantite_retournee }}</td>
+          <td class="num" style="color:var(--terracotta)">+{{ l.unites_retournees }}</td>
+          <td class="num" style="color:var(--terracotta)">{{ l.montant_retourne|floatformat:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="12" class="text-center text-muted-2 py-3">Aucune ligne.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="fw-semibold">
+          <td colspan="5" class="text-end">Totaux</td>
+          <td class="num">{{ calcul.quantite_facturee_totale }}</td>
+          <td class="num">{{ calcul.montant_facture_ht|floatformat:0 }}</td>
+          <td class="num">{{ calcul.quantite_vendue_totale }}</td>
+          <td class="num">{{ calcul.montant_vendu_ht|floatformat:0 }}</td>
+          <td class="num" style="color:var(--terracotta)">{{ calcul.quantite_retournee_totale }}</td>
+          <td class="num" style="color:var(--terracotta)">+{{ calcul.unites_retournees_totales }}</td>
+          <td class="num" style="color:var(--terracotta)">{{ calcul.montant_retourne_ht|floatformat:0 }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Marchandise reprise (retour en stock)</div>
+      <div class="card-body small">
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Conditionnements repris</span>
+          <span>{% for d in calcul.decompte_retourne %}{{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %} &nbsp;·&nbsp; {% endif %}{% empty %}—{% endfor %}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Unités réintégrées en stock</span><span>{{ calcul.unites_retournees_totales }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Valeur HT de la reprise</span><span>{{ calcul.montant_retourne_ht|floatformat:0 }}</span>
+        </div>
+        {% if calcul.facture.appliquer_tva %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>TVA sur la reprise</span><span>{{ calcul.montant_retourne_tva|floatformat:0 }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="fw-semibold">Total déduit de la facture</span>
+          <span class="h5 mb-0" style="font-family:Poppins;color:var(--terracotta)">- {{ calcul.montant_retourne_ttc|floatformat:0 }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Ce que doit le dépositaire</div>
+      <div class="card-body small">
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Total remises accordées</span><span>- {{ calcul.montant_remise_total|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>Montant HT vendu</span><span>{{ calcul.montant_vendu_ht|floatformat:0 }}</span>
+        </div>
+        {% if calcul.facture.appliquer_tva %}
+        <div class="d-flex justify-content-between text-muted-2">
+          <span>TVA (18%)</span><span>{{ calcul.montant_vendu_tva|floatformat:0 }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <span class="fw-semibold">Net à payer</span>
+          <span class="h4 mb-0" style="font-family:Poppins">{{ calcul.montant_vendu_ttc|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between text-muted-2 mt-1">
+          <span>Déjà payé</span><span>{{ calcul.deja_paye|floatformat:0 }}</span>
+        </div>
+        <div class="d-flex justify-content-between fw-semibold" style="color:var(--terracotta)">
+          <span>Reste à payer</span><span>{{ calcul.reste_a_payer|floatformat:0 }}</span>
+        </div>
+        <div class="text-muted-2 fst-italic mt-2">Arrêtée à la somme de : {{ retour.montant_en_lettres }}.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,11 +1,14 @@
 # Compatible cPanel / Python 3.8 - 3.11
 Django==4.2.16
 python-decouple==3.8
-mysqlclient==2.2.4          # base MySQL en production (cPanel)
+# base MySQL en production (cPanel)
 djangorestframework==3.15.2 # API stock temps reel
 whitenoise==6.7.0
 # --- Generation PDF des factures (WeasyPrint) ---
 weasyprint==60.2
-pydyf==0.10.0              # IMPORTANT : versions >=0.11 incompatibles avec WeasyPrint 60.2
+pydyf==0.10.0              
+# IMPORTANT : versions >=0.11 incompatibles avec WeasyPrint 60.2
 # WeasyPrint requiert des bibliotheques systeme (Pango, Cairo, GDK-PixBuf).
 # Sur cPanel : verifier leur presence, sinon voir README (section PDF).
+# --- Import Excel (listes de tarifs, tarifs, commandes) ---
+openpyxl==3.1.5

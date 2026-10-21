@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Importer des factures{% endblock %}
+{% block page_title %}Importer des factures (Excel){% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'ventes:facture_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour aux factures</a>
+{% endblock %}
+
+{% block content %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  <strong>Effet immédiat.</strong> Contrairement à l'import de commandes (qui ne crée que des bons de
+  commande en attente), cet import <strong>valide la commande sur le champ</strong> (le stock est
+  décrémenté) <strong>et émet la facture</strong> — une facture n'est ensuite annulable qu'avec
+  justificatif. Réservez cet import à la saisie en masse de ventes déjà réalisées (reprise d'historique).
+  Pour des commandes à vérifier avant facturation, utilisez plutôt
+  <a href="{% url 'ventes:commande_import' %}">l'import de commandes</a>.
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Fichier Excel</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" for="fichier">Fichier .xlsx</label>
+            <input type="file" id="fichier" name="fichier" class="form-control" accept=".xlsx,.xlsm" required>
+            <div class="form-text">La première ligne doit contenir les noms de colonnes.</div>
+          </div>
+          <button class="btn btn-primary"><i class="bi bi-upload"></i> Analyser le fichier</button>
+        </form>
+      </div>
+      <div class="card-body border-top small text-muted-2">
+        <i class="bi bi-shield-check"></i> Rien n'est écrit en base à cette étape : vous verrez d'abord
+        le détail, y compris les ruptures de stock éventuelles, avant de confirmer.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">Modèle à utiliser</div>
+      <div class="card-body">
+        <p class="small text-muted-2">
+          Même format que l'import de commandes : une ligne par article, la colonne « Groupe »
+          réunit les lignes d'une même facture.
+        </p>
+        <table class="table table-sm mb-3">
+          <thead><tr><th>Colonne</th><th>Détail</th></tr></thead>
+          <tbody>
+            <tr><td class="fw-semibold">Groupe</td><td>Identifiant libre pour regrouper les lignes</td></tr>
+            <tr><td class="fw-semibold">Client</td><td>Code client exact</td></tr>
+            <tr><td class="fw-semibold">Date</td><td>JJ/MM/AAAA (défaut : aujourd'hui)</td></tr>
+            <tr><td class="fw-semibold">Article</td><td>Code article (recommandé) ou libellé exact</td></tr>
+            <tr><td class="fw-semibold">Conditionnement</td><td>Nom exact d'un conditionnement existant</td></tr>
+            <tr><td class="fw-semibold">Quantité</td><td>Nombre de conditionnements (doit être en stock)</td></tr>
+            <tr><td class="fw-semibold">Remise unitaire</td><td>Optionnelle, par conditionnement</td></tr>
+            <tr><td class="fw-semibold">Appliquer TVA</td><td>Oui/Non, optionnel</td></tr>
+            <tr><td class="fw-semibold">Montant total attendu</td><td>Optionnel : signale un écart si différent du montant recalculé</td></tr>
+          </tbody>
+        </table>
+        <a href="{% url 'ventes:facture_import_modele' %}" class="btn btn-outline-primary">
+          <i class="bi bi-file-earmark-excel"></i> Télécharger le modèle vierge</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

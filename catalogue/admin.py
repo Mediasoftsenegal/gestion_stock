@@ -44,16 +44,18 @@ class ArticleAdmin(admin.ModelAdmin):
         "stock_actuel",
         "seuil_alerte",
         "fournisseur",
+        "prix_achat_liquide",
         "prix_achat",
         "prix_bouteille",
+        "etat_produit",
         "actif",
     ]
-    list_editable = ["categorie_articles","type_article","unite_base","seuil_alerte", "prix_achat", "prix_bouteille", "actif"]
+    list_editable = ["categorie_articles","type_article","unite_base","seuil_alerte", "prix_achat_liquide", "prix_bouteille"]
     list_display_links = ["code", "libarticle"]
-    list_filter = ["categorie_articles","type_article", "actif"]
-    search_fields = ["code", "libarticle"]
+    list_filter = ["categorie_articles","type_article", "actif", "etat_produit"]
+    search_fields = ["code", "libarticle", "reference"]
     filter_horizontal = ["conditionnements"]
-    autocomplete_fields = ["type_article"]
+    autocomplete_fields = ["type_article", "fournisseur"]
     inlines = [TarifInline]
     
     @admin.display(description="Conditionnements")

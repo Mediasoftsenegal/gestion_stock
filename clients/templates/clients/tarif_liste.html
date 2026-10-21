@@ -4,6 +4,8 @@
 
 {% block topbar_actions %}
   {% if peut_gerer %}
+  <a href="{% url 'clients:tarif_import' %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-file-earmark-arrow-up"></i> Importer (Excel)</a>
   <a href="{% url 'clients:tarif_nouvelle' %}" class="btn btn-sm btn-primary">
     <i class="bi bi-plus-lg"></i> Nouvelle liste de tarifs</a>
   {% endif %}

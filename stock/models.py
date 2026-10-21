@@ -197,7 +197,7 @@ class Approvisionnement(TimeStampedModel):
             pau = ligne.prix_achat_unitaire
             if pau is not None and pau != ligne.article.prix_achat:
                 ligne.article.prix_achat = pau
-                ligne.article.save(update_fields=["prix_achat", "modifie_le"])
+                ligne.article.save(update_fields=["prix_achat_liquide", "modifie_le"])
         self.valide = True
         self.save(update_fields=["valide", "modifie_le"])
 
@@ -439,10 +439,16 @@ class LigneInventaire(models.Model):
         return f"{self.article} : {self.quantite_physique}"
 
 class Fournisseur(models.Model):
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDFOURNISSEURS de l'ancien systeme (reprise de donnees).",
+    )
     nom_fournisseur = models.CharField(max_length=100)
     adressefour = models.TextField(blank=True)
-    emailfour = models.EmailField(blank=True)
-    telephonefourn = models.CharField(max_length=20, blank=True)
+    emailfour = models.CharField("e-mail", max_length=120, blank=True)
+    telephonefourn = models.CharField("telephone", max_length=50, blank=True)
+    mobile = models.CharField(max_length=50, blank=True)
+    fax = models.CharField(max_length=50, blank=True)
     typefour = models.CharField(max_length=50, blank=True)
     numerofour = models.CharField(max_length=50, blank=True)
     taxes = models.ManyToManyField(

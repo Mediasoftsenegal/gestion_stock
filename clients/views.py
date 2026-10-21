@@ -2,9 +2,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from core.utils import lire_xlsx
+
+from . import services
 from .models import CategorieClient, Client, ListeTarif
 
 
@@ -138,3 +142,91 @@ def liste_tarif_basculer(request, pk):
         f"Liste de tarifs « {liste.nomtarif} » {'activée' if liste.active else 'désactivée'}.",
     )
     return redirect("clients:tarif_detail", pk=liste.pk)
+
+
+# --------------------------------------------------------------------------- #
+#  Import Excel des listes de tarifs (noms)
+# --------------------------------------------------------------------------- #
+SESSION_KEY_IMPORT_LISTES = "listes_tarifs_import"
+
+
+@login_required
+@permission_required("clients.add_listetarif", raise_exception=True)
+def tarif_import_modele(request):
+    reponse = HttpResponse(
+        services.generer_modele(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    reponse["Content-Disposition"] = 'attachment; filename="modele_listes_de_tarifs.xlsx"'
+    return reponse
+
+
+@login_required
+@permission_required("clients.add_listetarif", raise_exception=True)
+def tarif_import(request):
+    if request.method == "POST":
+        fichier = request.FILES.get("fichier")
+        if not fichier:
+            messages.error(request, "Veuillez sélectionner un fichier Excel (.xlsx).")
+            return redirect("clients:tarif_import")
+        try:
+            entetes, lignes = lire_xlsx(fichier)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("clients:tarif_import")
+
+        if not lignes:
+            messages.error(request, "Fichier vide ou illisible.")
+            return redirect("clients:tarif_import")
+
+        request.session[SESSION_KEY_IMPORT_LISTES] = {"nom_fichier": fichier.name, "lignes": lignes}
+        return redirect("clients:tarif_import_apercu")
+
+    return render(request, "clients/tarif_import.html", {"actif": "tarifs"})
+
+
+@login_required
+@permission_required("clients.add_listetarif", raise_exception=True)
+def tarif_import_apercu(request):
+    data = request.session.get(SESSION_KEY_IMPORT_LISTES)
+    if not data:
+        messages.error(request, "Aucun import en cours. Chargez d'abord un fichier.")
+        return redirect("clients:tarif_import")
+
+    lignes = data["lignes"]
+    action = request.POST.get("action", "") if request.method == "POST" else ""
+
+    if action == "annuler":
+        del request.session[SESSION_KEY_IMPORT_LISTES]
+        messages.info(request, "Import annulé.")
+        return redirect("clients:tarifs_liste")
+
+    resultats, stats = services.analyser(lignes)
+
+    if action == "appliquer":
+        try:
+            compteurs = services.appliquer(
+                lignes,
+                creer_nouveaux=bool(request.POST.get("creer_nouveaux")),
+                mettre_a_jour=bool(request.POST.get("mettre_a_jour")),
+            )
+        except ValidationError as e:
+            messages.error(request, "; ".join(e.messages))
+            return redirect("clients:tarif_import_apercu")
+
+        del request.session[SESSION_KEY_IMPORT_LISTES]
+        messages.success(
+            request,
+            f"Import terminé : {compteurs['crees']} liste(s) créée(s), "
+            f"{compteurs['modifies']} mise(s) à jour, {compteurs['ignores']} ligne(s) ignorée(s), "
+            f"{compteurs['erreurs']} en erreur.",
+        )
+        return redirect("clients:tarifs_liste")
+
+    return render(request, "clients/tarif_import_apercu.html", {
+        "actif": "tarifs",
+        "nom_fichier": data.get("nom_fichier", ""),
+        "resultats": resultats,
+        "stats": stats,
+        "nb_lignes": len(lignes),
+    })

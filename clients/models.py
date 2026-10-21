@@ -23,6 +23,10 @@ class ListeTarif(TimeStampedModel):
     (voir catalogue.Tarif).
     """
 
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDNOMLISTE de l'ancien systeme (reprise de donnees).",
+    )
     nomtarif = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
@@ -37,6 +41,10 @@ class ListeTarif(TimeStampedModel):
 
 
 class Client(TimeStampedModel):
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDCLIENTS de l'ancien systeme (reprise de donnees).",
+    )
     nomclient = models.CharField(max_length=200)
     adresse = models.CharField(max_length=255, blank=True)
     categorie = models.ForeignKey(
@@ -44,6 +52,9 @@ class Client(TimeStampedModel):
     )
     codeclient = models.CharField(max_length=30, unique=True)
     telephone = models.CharField(max_length=40, blank=True)
+    fax = models.CharField(max_length=50, blank=True)
+    mobile = models.CharField(max_length=50, blank=True)
+    societe = models.CharField(max_length=200, blank=True)
     email = models.EmailField(blank=True)
     exempttva = models.BooleanField(default=False)
     avectva = models.BooleanField(default=True)

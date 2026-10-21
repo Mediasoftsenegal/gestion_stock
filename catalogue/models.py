@@ -8,6 +8,10 @@ from core.models import TimeStampedModel
 
 
 class TypeArticle(TimeStampedModel):
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="ID de l'ancien systeme (reprise de donnees).",
+    )
     nom = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
 
@@ -40,6 +44,10 @@ class Conditionnement(TimeStampedModel):
     def __str__(self):
         return f"{self.nom} ({self.nombre_unites})"
 class categorie_article(models.Model):
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDCATEGORIE de l'ancien systeme (reprise de donnees).",
+    )
     categories_articles = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
 
@@ -52,9 +60,22 @@ class categorie_article(models.Model):
         return self.categories_articles
 
 class Article(TimeStampedModel):
+    class EtatProduit(models.TextChoices):
+        EN_ETAT = "en_etat", "En état"
+        A_L_ARRET = "a_l_arret", "À l'arrêt"
+        EN_RUPTURE = "en_rupture", "En rupture"
+
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDARTICLE de l'ancien systeme (reprise de donnees).",
+    )
     code = models.CharField(
         max_length=40, unique=True, blank=True,
         help_text="Laisser vide pour generer automatiquement un code (ART00001...).",
+    )
+    reference = models.CharField(
+        "reference historique", max_length=40, blank=True,
+        help_text="Reference de l'ancien systeme (ex. AP0010), distincte du code interne.",
     )
     libarticle = models.CharField(max_length=200)
     categorie_articles = models.ForeignKey('categorie_article', on_delete=models.SET_NULL, null=True, blank=True)
@@ -66,16 +87,15 @@ class Article(TimeStampedModel):
         related_name="articles",
     )
     unite_base = models.CharField(max_length=30, default="unite")
-    prix_achat = models.DecimalField(
-        "prix d'achat (par unite de base)",
-        max_digits=12,
-        decimal_places=2,
-        default=0,
-        help_text=(
-            "Cout d'acquisition d'une unite de base. Sert de plancher : un prix "
-            "de vente ne peut lui etre inferieur. Mis a jour automatiquement lors "
-            "de la validation d'un approvisionnement chiffre."
-        ),
+    prix_achat_liquide = models.DecimalField(
+        "prix d'achat (liquide, par unite de base)",
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Cout du contenu (hors emballage) d'une unite de base.",
+    )
+    prix_achat_emballage = models.DecimalField(
+        "prix d'achat (emballage, par unite de base)",
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Cout de l'emballage (bouteille, canette...) d'une unite de base.",
     )
     conditionnements = models.ManyToManyField(
         Conditionnement,
@@ -97,6 +117,10 @@ class Article(TimeStampedModel):
         default=0,
         help_text="Prix de vente par bouteille (ou unite de base).",
     )
+    prix_ttc = models.DecimalField(
+        "prix TTC (reference)", max_digits=12, decimal_places=2, default=0, blank=True,
+        help_text="Valeur de reference de l'ancien systeme ; n'est pas utilisee dans les calculs.",
+    )
     consignation = models.DecimalField(
         "consignation par bouteille",
         max_digits=12,
@@ -104,9 +128,16 @@ class Article(TimeStampedModel):
         default=0,
         help_text="Consignation par bouteille (ou unite de base).",
     )
-    fournisseur = models.CharField(max_length=200, blank=True, help_text="Fournisseur de l'article")
+    fournisseur = models.ForeignKey(
+        "stock.Fournisseur", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="articles", help_text="Fournisseur habituel de l'article.",
+    )
     groupe = models.CharField(max_length=100, blank=True, help_text="Groupe de l'article")
-    actif = models.BooleanField(default=True)
+    etat_produit = models.CharField(
+        max_length=15, choices=EtatProduit.choices, default=EtatProduit.EN_ETAT,
+        help_text="Statut repris de l'ancien systeme ; determine `actif`.",
+    )
+    actif = models.BooleanField(default=True, editable=False)
 
     class Meta:
         verbose_name = "article"
@@ -121,7 +152,22 @@ class Article(TimeStampedModel):
             from core.utils import generer_code
 
             self.code = generer_code("ART", Article)
+        self.actif = self.etat_produit == self.EtatProduit.EN_ETAT
         super().save(*args, **kwargs)
+
+    @property
+    def prix_achat(self):
+        """Cout total d'acquisition d'une unite de base (liquide + emballage).
+
+        Sert de plancher : un prix de vente ne peut lui etre inferieur. Mis a
+        jour automatiquement lors de la validation d'un approvisionnement
+        chiffre (voir `Approvisionnement.valider`).
+        """
+        return (self.prix_achat_liquide or Decimal("0")) + (self.prix_achat_emballage or Decimal("0"))
+
+    @prix_achat.setter
+    def prix_achat(self, valeur):
+        self.prix_achat_liquide = valeur or Decimal("0")
 
     @property
     def stock_actuel(self):

@@ -8,12 +8,23 @@ urlpatterns = [
     # Commandes
     path("commandes/", views.commande_liste, name="commande_liste"),
     path("commandes/nouvelle/", views.commande_create, name="commande_create"),
+    path("commandes/importer/modele/", views.commande_import_modele, name="commande_import_modele"),
+    path("commandes/importer/", views.commande_import, name="commande_import"),
+    path("commandes/importer/apercu/", views.commande_import_apercu, name="commande_import_apercu"),
     path("commandes/<int:pk>/", views.commande_detail, name="commande_detail"),
     path("commandes/<int:pk>/valider/", views.commande_valider, name="commande_valider"),
     path("commandes/<int:pk>/generer-facture/", views.commande_generer_facture, name="commande_generer_facture"),
     path("commandes/<int:pk>/supprimer/", views.commande_supprimer, name="commande_supprimer"),
+    # Archives (historique 2013-2023, consultation seule)
+    path("archives/", views.archive_liste, name="archive_liste"),
+    path("archives/<int:pk>/", views.archive_detail, name="archive_detail"),
+    path("archives/factures/", views.archive_facture_liste, name="archive_facture_liste"),
+    path("archives/factures/<int:pk>/", views.archive_facture_detail, name="archive_facture_detail"),
     # Factures
     path("factures/", views.facture_liste, name="facture_liste"),
+    path("factures/importer/modele/", views.facture_import_modele, name="facture_import_modele"),
+    path("factures/importer/", views.facture_import, name="facture_import"),
+    path("factures/importer/apercu/", views.facture_import_apercu, name="facture_import_apercu"),
     path("factures/<int:pk>/", views.facture_detail, name="facture_detail"),
     path("factures/<int:pk>/pdf/", views.facture_pdf, name="facture_pdf"),
     path("factures/<int:pk>/encaisser/", views.encaisser, name="encaisser"),

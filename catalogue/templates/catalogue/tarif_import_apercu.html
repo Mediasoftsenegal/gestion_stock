@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Aperçu de l'import{% endblock %}
+{% block page_title %}Aperçu avant import des tarifs{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'catalogue:tarif_import' %}" class="btn btn-sm btn-outline-secondary">← Changer de fichier</a>
+{% endblock %}
+
+{% block content %}
+<form method="post">{% csrf_token %}
+
+<p class="text-muted-2 small">{{ nom_fichier }} ({{ nb_lignes }} ligne{{ nb_lignes|pluralize }})</p>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Créations</div>
+    <div class="h3 mb-0" style="font-family:Poppins">{{ stats.creations }}</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Mises à jour</div>
+    <div class="h3 mb-0" style="font-family:Poppins">{{ stats.mises_a_jour }}</div></div></div></div>
+  <div class="col-md-4"><div class="card"><div class="card-body text-center">
+    <div class="text-muted-2 small">Erreurs</div>
+    <div class="h3 mb-0" style="font-family:Poppins;color:var(--terracotta)">{{ stats.erreurs }}</div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Détail ligne à ligne</div>
+  <div class="table-responsive" style="max-height:520px;overflow:auto">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>#</th><th>Liste de tarifs</th><th>Article</th><th>Conditionnement</th><th class="num">Prix</th><th>Action</th><th>Erreurs</th></tr></thead>
+      <tbody>
+        {% for r in resultats %}
+        <tr>
+          <td class="text-muted-2">{{ r.numero }}</td>
+          <td>{{ r.liste_tarif|default:"—" }}</td>
+          <td class="fw-semibold">{{ r.article|default:"—" }}</td>
+          <td>{{ r.conditionnement|default:"—" }}</td>
+          <td class="num">{{ r.montant|default:r.prix }}</td>
+          <td>
+            {% if r.action == 'creation' %}<span class="badge-soft badge-ok">Création</span>
+            {% elif r.action == 'maj' %}<span class="badge-soft badge-attente">Mise à jour</span>
+            {% elif r.action == 'erreur' %}<span class="badge-soft badge-danger">Erreur</span>
+            {% else %}<span class="badge-soft badge-neutre">Inchangé</span>{% endif %}
+          </td>
+          <td class="small">
+            {% for e in r.erreurs %}<div style="color:var(--terracotta)">{{ e }}</div>{% empty %}<span class="text-muted-2">—</span>{% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted-2 py-4">Aucune ligne exploitable.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Appliquer</div>
+  <div class="card-body">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="creerNouveaux" name="creer_nouveaux" checked>
+      <label class="form-check-label" for="creerNouveaux">Créer les tarifs absents de la base ({{ stats.creations }})</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="majExistants" name="mettre_a_jour" checked>
+      <label class="form-check-label" for="majExistants">Mettre à jour les tarifs existants ({{ stats.mises_a_jour }})</label>
+    </div>
+    <div class="form-text mb-3">Les lignes en erreur sont toujours ignorées.</div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="appliquer" class="btn btn-primary"
+              onclick="return confirm('Importer ces tarifs ?')">
+        <i class="bi bi-check2-circle"></i> Importer</button>
+      <button type="submit" name="action" value="annuler" class="btn btn-outline-danger">Annuler l'import</button>
+    </div>
+  </div>
+</div>
+</form>
+{% endblock %}

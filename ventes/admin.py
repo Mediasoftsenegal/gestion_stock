@@ -3,9 +3,11 @@ from django.contrib import admin, messages
 
 from .models import (
     Commande,
+    CommandeArchivee,
     Facture,
     FactureRetour,
     LigneCommande,
+    LigneCommandeArchivee,
     LigneFacture,
     LigneFactureRetour,
     Paiement,
@@ -296,3 +298,20 @@ class FactureRetourAdmin(admin.ModelAdmin):
                 )
             except Exception as exc:  # noqa: BLE001
                 self.message_user(request, f"{retour.numero} : {exc}", messages.ERROR)
+
+
+class LigneCommandeArchiveeInline(admin.TabularInline):
+    model = LigneCommandeArchivee
+    extra = 0
+    can_delete = False
+    autocomplete_fields = ["article"]
+
+
+@admin.register(CommandeArchivee)
+class CommandeArchiveeAdmin(admin.ModelAdmin):
+    list_display = ["reference", "date", "client", "montant", "etat"]
+    list_filter = ["etat"]
+    search_fields = ["reference", "client__nomclient"]
+    autocomplete_fields = ["client"]
+    date_hierarchy = "date"
+    inlines = [LigneCommandeArchiveeInline]

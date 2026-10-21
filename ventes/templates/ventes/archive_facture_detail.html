@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ facture.reference }}{% endblock %}
+{% block page_title %}Facture archivée {{ facture.reference }}{% endblock %}
+{% block topbar_actions %}<a href="{% url 'ventes:archive_facture_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour aux archives</a>{% endblock %}
+
+{% block content %}
+<div class="alert alert-info small"><i class="bi bi-archive"></i> Historique en consultation uniquement.</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span>{{ facture.reference }}</span>
+        <span class="badge-soft badge-neutre">{{ facture.modalite|default:"—" }}</span>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Client</dt><dd class="col-7">{{ facture.client.nom|default:facture.nom_client|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Date</dt><dd class="col-7">{{ facture.date|date:"d/m/Y"|default:"—" }}</dd>
+          {% if facture.commande_ancien_id %}<dt class="col-5 text-muted-2">N° commande (hist.)</dt><dd class="col-7">{{ facture.commande_ancien_id }}</dd>{% endif %}
+          <dt class="col-5 text-muted-2">Montant</dt><dd class="col-7">{{ facture.montant|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">Montant liquide</dt><dd class="col-7">{{ facture.montant_liquide|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">Montant emballage</dt><dd class="col-7">{{ facture.montant_emballage|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">Mode de règlement</dt><dd class="col-7">{{ facture.mode_reglement|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Montant réglé</dt><dd class="col-7">{{ facture.montant_regle|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">Date de règlement</dt><dd class="col-7">{{ facture.date_reglement|date:"d/m/Y"|default:"—" }}</dd>
+          {% if facture.retour_casier %}<dt class="col-5 text-muted-2">Retour casier</dt><dd class="col-7">{{ facture.retour_casier|floatformat:0 }}</dd>{% endif %}
+          {% if facture.observations %}<dt class="col-5 text-muted-2">Observations</dt><dd class="col-7">{{ facture.observations }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Lignes de facture</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Quantité</th><th class="num">Prix liquide</th><th class="num">Prix emballage</th><th class="num">Remise</th></tr></thead>
+          <tbody>
+            {% for l in facture.lignes.all %}
+            <tr>
+              <td>{{ l.article.libarticle|default:"—" }}</td>
+              <td>{{ l.conditionnement|default:"—" }}</td>
+              <td class="num">{{ l.quantite|floatformat:0 }}</td>
+              <td class="num">{{ l.prix_liquide|floatformat:0 }}</td>
+              <td class="num">{{ l.prix_emballage|floatformat:0 }}</td>
+              <td class="num">{{ l.remise|floatformat:0 }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="6" class="text-center text-muted-2 py-4">Aucune ligne.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ commande.reference }}{% endblock %}
+{% block page_title %}Commande archivée {{ commande.reference }}{% endblock %}
+{% block topbar_actions %}<a href="{% url 'ventes:archive_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour aux archives</a>{% endblock %}
+
+{% block content %}
+<div class="alert alert-info small"><i class="bi bi-archive"></i> Historique en consultation uniquement.</div>
+
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span>{{ commande.reference }}</span>
+        <span class="badge-soft badge-neutre">{{ commande.etat|default:"—" }}</span>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted-2">Client</dt><dd class="col-7">{{ commande.client.nom|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Date</dt><dd class="col-7">{{ commande.date|date:"d/m/Y"|default:"—" }}</dd>
+          <dt class="col-5 text-muted-2">Montant</dt><dd class="col-7">{{ commande.montant|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">Montant emballage</dt><dd class="col-7">{{ commande.montant_emballage|floatformat:0 }}</dd>
+          <dt class="col-5 text-muted-2">TVA</dt><dd class="col-7">{{ commande.taux_tva|floatformat:0 }} %</dd>
+          <dt class="col-5 text-muted-2">Mode de règlement</dt><dd class="col-7">{{ commande.mode_reglement|default:"—" }}</dd>
+          {% if commande.numero_cheque %}<dt class="col-5 text-muted-2">N° chèque</dt><dd class="col-7">{{ commande.numero_cheque }}</dd>{% endif %}
+          <dt class="col-5 text-muted-2">Saisie par</dt><dd class="col-7">{{ commande.saisie_par|default:"—" }}</dd>
+          {% if commande.auteur %}<dt class="col-5 text-muted-2">Auteur</dt><dd class="col-7">{{ commande.auteur }}</dd>{% endif %}
+          {% if commande.observations %}<dt class="col-5 text-muted-2">Observations</dt><dd class="col-7">{{ commande.observations }}</dd>{% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Lignes de commande</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Quantité</th><th class="num">Prix liquide</th><th class="num">Prix emballage</th><th class="num">Remise</th></tr></thead>
+          <tbody>
+            {% for l in commande.lignes.all %}
+            <tr>
+              <td>{{ l.article.libarticle|default:"—" }}</td>
+              <td>{{ l.conditionnement|default:"—" }}</td>
+              <td class="num">{{ l.quantite|floatformat:0 }}</td>
+              <td class="num">{{ l.prix_liquide|floatformat:0 }}</td>
+              <td class="num">{{ l.prix_emballage|floatformat:0 }}</td>
+              <td class="num">{{ l.remise|floatformat:0 }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="6" class="text-center text-muted-2 py-4">Aucune ligne.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

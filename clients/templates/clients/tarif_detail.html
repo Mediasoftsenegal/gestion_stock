@@ -14,6 +14,8 @@
   </form>
   {% endif %}
   {% if peut_gerer_tarifs %}
+  <a href="{% url 'catalogue:tarif_import' %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-file-earmark-arrow-up"></i> Importer (Excel)</a>
   <a href="{% url 'catalogue:tarif_nouveau' %}?liste_tarif={{ liste.pk }}" class="btn btn-sm btn-primary">
     <i class="bi bi-plus-lg"></i> Ajouter un tarif</a>
   {% endif %}

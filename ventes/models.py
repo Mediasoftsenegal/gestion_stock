@@ -42,6 +42,10 @@ class Commande(TimeStampedModel):
         VALIDEE = "VALIDEE", "Validee (facturee)"
         ANNULEE = "ANNULEE", "Annulee"
 
+    ancien_id = models.IntegerField(
+        "identifiant historique", null=True, blank=True, db_index=True, editable=False,
+        help_text="IDCOMMANDES de l'ancien systeme (reprise de donnees 2024-2026).",
+    )
     reference = models.CharField(max_length=60, unique=True, blank=True)
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="commandes")
     liste_tarif = models.ForeignKey(
@@ -172,7 +176,7 @@ class Commande(TimeStampedModel):
         """
         if self.statut != self.Statut.VALIDEE:
             raise ValidationError("Seule une commande validee peut etre facturee.")
-        if hasattr(self, "facture"):
+        if self.factures.filter(annulee=False).exists():
             raise ValidationError("Cette commande a deja une facture.")
 
         lignes = list(self.lignes.select_related("article", "conditionnement"))
@@ -201,7 +205,13 @@ class LigneCommande(models.Model):
     commande = models.ForeignKey(Commande, on_delete=models.CASCADE, related_name="lignes")
     article = models.ForeignKey(Article, on_delete=models.PROTECT)
     conditionnement = models.ForeignKey(Conditionnement, on_delete=models.PROTECT)
-    quantite = models.PositiveIntegerField(help_text="Nombre de conditionnements.")
+    quantite = models.DecimalField(
+        max_digits=10, decimal_places=3, default=Decimal("1"),
+        help_text=(
+            "Nombre de conditionnements. Peut etre fractionnaire (ex. 0,5 pour un "
+            "demi-casier) ou negatif (reprise d'un retour historique)."
+        ),
+    )
     prix_unitaire = models.DecimalField(
         max_digits=12, decimal_places=2, blank=True,
         help_text="Renseigne automatiquement depuis la liste de tarifs si laisse vide.",
@@ -287,9 +297,13 @@ class Facture(TimeStampedModel):
         PARTIELLE = "PARTIELLE", "Partiellement payee"
         PAYEE = "PAYEE", "Payee"
 
+    ancien_id = models.IntegerField(
+        "identifiant historique", unique=True, null=True, blank=True,
+        editable=False, help_text="IDFACTURES de l'ancien systeme (reprise de l'historique).",
+    )
     numero = models.CharField(max_length=60, unique=True, blank=True)
-    commande = models.OneToOneField(
-        Commande, on_delete=models.PROTECT, related_name="facture"
+    commande = models.ForeignKey(
+        Commande, on_delete=models.PROTECT, related_name="factures"
     )
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="factures")
     date = models.DateTimeField(default=timezone.now)
@@ -450,7 +464,7 @@ class LigneFacture(models.Model):
     facture = models.ForeignKey(Facture, on_delete=models.PROTECT, related_name="lignes")
     article = models.ForeignKey(Article, on_delete=models.PROTECT)
     conditionnement = models.ForeignKey(Conditionnement, on_delete=models.PROTECT)
-    quantite = models.PositiveIntegerField()
+    quantite = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal("1"))
     prix_unitaire = models.DecimalField(max_digits=12, decimal_places=2)
     remise_unitaire = models.DecimalField(
         "remise unitaire",
@@ -932,3 +946,123 @@ class Paiement(TimeStampedModel):
                 raise ValidationError(
                     "Le montant depasse le reliquat de la facture."
                 )
+
+
+# --------------------------------------------------------------------------- #
+#  Archives (reprise de l'historique 2013-2023, consultation seule)
+#
+#  Donnees historiques importees en masse depuis l'ancien systeme, separees
+#  des tables operationnelles (Commande/LigneCommande, qui ne portent que
+#  les commandes courantes a partir de 2024). Pas de logique metier ici
+#  (pas de recalcul de prix, pas d'impact sur le stock, pas de validation) :
+#  ce sont des instantanes a consulter, pas des documents a modifier.
+# --------------------------------------------------------------------------- #
+class CommandeArchivee(models.Model):
+    ancien_id = models.IntegerField("identifiant historique", unique=True, db_index=True)
+    reference = models.CharField(max_length=60, blank=True, help_text="NUMCOMMANDE de l'ancien systeme.")
+    client = models.ForeignKey(
+        Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="commandes_archivees"
+    )
+    date = models.DateField(null=True, blank=True, db_index=True)
+    montant = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    montant_emballage = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    taux_tva = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    etat = models.CharField(max_length=20, blank=True, help_text="ETATCOMMANDE brut de l'ancien systeme.")
+    mode_reglement = models.CharField(max_length=50, blank=True)
+    numero_cheque = models.CharField(max_length=50, blank=True)
+    saisie_par = models.CharField(max_length=100, blank=True)
+    auteur = models.CharField(max_length=100, blank=True)
+    observations = models.TextField(blank=True)
+    nb_casiers_gm = models.IntegerField(default=0)
+    nb_casiers_pm = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name = "commande archivée"
+        verbose_name_plural = "commandes archivées"
+        ordering = ["-date", "-ancien_id"]
+
+    def __str__(self):
+        return self.reference or f"Commande archivée #{self.ancien_id}"
+
+
+class LigneCommandeArchivee(models.Model):
+    commande = models.ForeignKey(CommandeArchivee, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(
+        Article, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    conditionnement = models.CharField(
+        max_length=60, blank=True, help_text="Texte brut de l'ancien systeme (donnees heterogenes).",
+    )
+    quantite = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    remise = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    prix_liquide = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    prix_emballage = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        verbose_name = "ligne de commande archivée"
+        verbose_name_plural = "lignes de commande archivées"
+
+    def __str__(self):
+        return f"{self.article or self.conditionnement} x {self.quantite}"
+
+
+class FactureArchivee(models.Model):
+    """Historique des factures (2013-2026), consultation seule.
+
+    Pas de FK directe vers Commande/CommandeArchivee : selon la periode, la
+    commande d'origine (IDCOMMANDES) vit dans l'une ou l'autre table. On
+    garde juste l'identifiant historique (`commande_ancien_id`) pour
+    pouvoir la retrouver si besoin, et un instantane du client.
+
+    Important : une commande peut avoir plusieurs factures historiques
+    (acomptes, factures partielles) — relation que le modele `Facture`
+    actuel (1-a-1 avec Commande) ne permet pas de representer.
+    """
+
+    ancien_id = models.IntegerField("identifiant historique", unique=True, db_index=True)
+    reference = models.CharField(max_length=60, blank=True, help_text="NUMFACTURE de l'ancien systeme.")
+    commande_ancien_id = models.IntegerField(null=True, blank=True, db_index=True)
+    client = models.ForeignKey(
+        Client, null=True, blank=True, on_delete=models.SET_NULL, related_name="factures_archivees"
+    )
+    nom_client = models.CharField(max_length=200, blank=True, help_text="Filet de securite si le client n'est pas resolu.")
+    date = models.DateField(null=True, blank=True, db_index=True)
+    montant = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    montant_liquide = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    montant_emballage = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    mode_reglement = models.CharField(max_length=50, blank=True)
+    montant_regle = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    date_reglement = models.DateField(null=True, blank=True)
+    modalite = models.CharField(max_length=30, blank=True, help_text="COMPTANT, ACOMPTE, ANNULEE...")
+    observations = models.TextField(blank=True)
+    retour_casier = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    date_retour = models.DateField(null=True, blank=True)
+    retour_emballage = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    nb_casiers_gm = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    nb_casiers_pm = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    numero_ordre = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "facture archivée"
+        verbose_name_plural = "factures archivées"
+        ordering = ["-date", "-ancien_id"]
+
+    def __str__(self):
+        return self.reference or f"Facture archivée #{self.ancien_id}"
+
+
+class LigneFactureArchivee(models.Model):
+    facture = models.ForeignKey(FactureArchivee, on_delete=models.CASCADE, related_name="lignes")
+    article = models.ForeignKey(Article, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    conditionnement = models.CharField(max_length=60, blank=True)
+    quantite = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    remise = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    prix_liquide = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    prix_emballage = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        verbose_name = "ligne de facture archivée"
+        verbose_name_plural = "lignes de facture archivées"
+
+    def __str__(self):
+        return f"{self.article or self.conditionnement} x {self.quantite}"

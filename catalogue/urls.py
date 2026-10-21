@@ -11,4 +11,7 @@ urlpatterns = [
     path("articles/<int:pk>/", views.article_detail, name="article_detail"),
     path("tarifs/nouveau/", views.tarif_form, name="tarif_nouveau"),
     path("tarifs/<int:pk>/modifier/", views.tarif_form, name="tarif_modifier"),
+    path("tarifs/importer/modele/", views.tarif_import_modele, name="tarif_import_modele"),
+    path("tarifs/importer/", views.tarif_import, name="tarif_import"),
+    path("tarifs/importer/apercu/", views.tarif_import_apercu, name="tarif_import_apercu"),
 ]

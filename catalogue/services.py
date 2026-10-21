@@ -12,58 +12,16 @@ mise a niveau, pas un remplacement.
 
 import csv
 import io
-import unicodedata
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from clients.models import ListeTarif
+from core.utils import normaliser_texte as normaliser
+from core.utils import parser_booleen, parser_decimal, parser_entier
 
 from .models import Article, Conditionnement, Tarif, TypeArticle, categorie_article
-
-
-# --------------------------------------------------------------------------- #
-#  Utilitaires de lecture
-# --------------------------------------------------------------------------- #
-def normaliser(valeur):
-    """Normalise un texte pour comparaison tolerante (accents/casse/espaces)."""
-    valeur = (valeur or "").strip()
-    valeur = unicodedata.normalize("NFD", valeur).encode("ascii", "ignore").decode("ascii")
-    valeur = valeur.replace("_", " ").replace("-", " ").replace(".", " ")
-    return " ".join(valeur.upper().split())
-
-
-def parser_decimal(valeur, defaut=Decimal("0")):
-    valeur = str(valeur or "").strip()
-    if not valeur:
-        return defaut
-    valeur = valeur.replace("\xa0", "").replace(" ", "").replace(",", ".")
-    valeur = valeur.replace("FCFA", "").replace("F", "") if valeur.upper().endswith("FCFA") else valeur
-    try:
-        return Decimal(valeur)
-    except (InvalidOperation, ValueError):
-        return defaut
-
-
-def parser_entier(valeur, defaut=0):
-    dec = parser_decimal(valeur, defaut=None)
-    if dec is None:
-        return defaut
-    try:
-        return int(dec.to_integral_value(rounding=ROUND_HALF_UP))
-    except (InvalidOperation, ValueError):
-        return defaut
-
-
-def parser_booleen(valeur, defaut=True):
-    texte = normaliser(valeur)
-    if not texte:
-        return defaut
-    if texte in {"1", "OUI", "O", "TRUE", "VRAI", "ACTIF", "YES", "Y", "X"}:
-        return True
-    if texte in {"0", "NON", "N", "FALSE", "FAUX", "INACTIF", "NO"}:
-        return False
-    return defaut
 
 
 # Colonnes reconnues : {champ interne: libelles acceptes dans le fichier}
@@ -88,7 +46,7 @@ CHAMPS_FICHIER = {
 }
 
 # Champs simples reportes tels quels sur l'article (nom du champ modele -> parseur)
-CHAMPS_TEXTE = ["libarticle", "unite_base", "code_barre", "fournisseur", "groupe"]
+CHAMPS_TEXTE = ["libarticle", "unite_base", "code_barre", "groupe"]
 CHAMPS_MONTANT = ["prix_achat", "prix_bouteille", "consignation"]
 
 LIBELLES = {
@@ -486,5 +444,159 @@ def appliquer(lignes, mapping, creer_nouveaux=True, mettre_a_jour=True, applique
                 defaults={"prix_unitaire": info["prix"]},
             )
             compteurs["tarifs"] += 1
+
+    return compteurs
+
+
+# --------------------------------------------------------------------------- #
+#  Import Excel des tarifs (prix d'un article existant, pour une liste de
+#  tarifs et un conditionnement existants). A la difference des tarifs
+#  embarques dans l'import catalogue ci-dessus, la liste de tarifs et
+#  l'article doivent deja exister : ce n'est pas le role de cet import de
+#  les creer a la volee.
+# --------------------------------------------------------------------------- #
+COLONNES_MODELE_TARIFS = ["Liste de tarifs", "Article (code ou libellé)", "Conditionnement", "Prix"]
+EXEMPLES_MODELE_TARIFS = [("Gros", "ART00001", "Casier 24", "15000")]
+
+
+def generer_modele_tarifs():
+    from core.utils import generer_modele_xlsx
+
+    return generer_modele_xlsx(COLONNES_MODELE_TARIFS, exemples=EXEMPLES_MODELE_TARIFS, feuille="Tarifs")
+
+
+def _valeur_tarif(row, *cles):
+    for cle in cles:
+        if row.get(cle):
+            return str(row[cle]).strip()
+    return ""
+
+
+def analyser_tarifs(lignes):
+    """Compare chaque ligne du fichier aux tarifs existants, sans rien
+    ecrire. L'article et la liste de tarifs doivent deja exister."""
+    listes = {normaliser(l.nomtarif): l for l in ListeTarif.objects.all()}
+    articles_par_code = {normaliser(a.code): a for a in Article.objects.all()}
+    articles_par_libelle = {}
+    for a in Article.objects.all():
+        articles_par_libelle.setdefault(normaliser(a.libarticle), a)
+    conditionnements = {normaliser(c.nom): c for c in Conditionnement.objects.all()}
+    existants = {
+        (t.liste_tarif_id, t.article_id, t.conditionnement_id): t
+        for t in Tarif.objects.select_related("liste_tarif", "article", "conditionnement")
+    }
+
+    resultats = []
+    stats = {"creations": 0, "mises_a_jour": 0, "inchanges": 0, "erreurs": 0}
+    vus_dans_fichier = set()
+
+    for index, row in enumerate(lignes, start=1):
+        nom_liste = _valeur_tarif(row, "LISTE DE TARIFS", "LISTE TARIF")
+        ref_article = _valeur_tarif(row, "ARTICLE (CODE OU LIBELLE)", "ARTICLE", "CODE")
+        nom_cond = _valeur_tarif(row, "CONDITIONNEMENT")
+        brut_prix = _valeur_tarif(row, "PRIX")
+
+        ligne = {
+            "numero": index, "liste_tarif": nom_liste, "article": ref_article,
+            "conditionnement": nom_cond, "prix": brut_prix,
+            "liste": None, "article_obj": None, "cond_obj": None, "montant": None,
+            "erreurs": [], "action": "erreur",
+        }
+
+        if not (nom_liste and ref_article and nom_cond and brut_prix):
+            ligne["erreurs"].append("Liste de tarifs, article, conditionnement et prix sont tous obligatoires.")
+            stats["erreurs"] += 1
+            resultats.append(ligne)
+            continue
+
+        liste = listes.get(normaliser(nom_liste))
+        if liste is None:
+            ligne["erreurs"].append(f"Liste de tarifs inexistante : « {nom_liste} ».")
+        ligne["liste"] = liste
+
+        article = articles_par_code.get(normaliser(ref_article)) or articles_par_libelle.get(normaliser(ref_article))
+        if article is None:
+            ligne["erreurs"].append(f"Article inconnu : « {ref_article} ».")
+        ligne["article_obj"] = article
+
+        cond = conditionnements.get(normaliser(nom_cond))
+        if cond is None:
+            ligne["erreurs"].append(f"Conditionnement inconnu : « {nom_cond} ».")
+        ligne["cond_obj"] = cond
+
+        montant = parser_decimal(brut_prix, defaut=None)
+        if montant is None or montant <= 0:
+            ligne["erreurs"].append(f"Montant invalide : « {brut_prix} ».")
+        ligne["montant"] = montant
+
+        if not ligne["erreurs"] and article and cond:
+            plancher = article.prix_vente_minimum(cond)
+            if plancher and montant < plancher:
+                ligne["erreurs"].append(
+                    f"Le prix ({montant}) ne peut être inférieur au prix d'achat ({plancher}) pour {cond}."
+                )
+
+        if not ligne["erreurs"]:
+            cle = (liste.pk, article.pk, cond.pk)
+            if cle in vus_dans_fichier:
+                ligne["erreurs"].append("Doublon dans le fichier (même liste, article et conditionnement).")
+            else:
+                vus_dans_fichier.add(cle)
+
+        if ligne["erreurs"]:
+            ligne["action"] = "erreur"
+            stats["erreurs"] += 1
+        else:
+            existant = existants.get((liste.pk, article.pk, cond.pk))
+            if existant is None:
+                ligne["action"] = "creation"
+                stats["creations"] += 1
+            elif existant.prix_unitaire != montant:
+                ligne["action"] = "maj"
+                stats["mises_a_jour"] += 1
+            else:
+                ligne["action"] = "inchange"
+                stats["inchanges"] += 1
+
+        resultats.append(ligne)
+
+    return resultats, stats
+
+
+@transaction.atomic
+def appliquer_tarifs_import(lignes, creer_nouveaux=True, mettre_a_jour=True):
+    resultats, _ = analyser_tarifs(lignes)
+    compteurs = {"crees": 0, "modifies": 0, "ignores": 0, "erreurs": 0}
+
+    for ligne in resultats:
+        if ligne["action"] == "erreur":
+            compteurs["erreurs"] += 1
+            continue
+        if ligne["action"] == "creation" and not creer_nouveaux:
+            compteurs["ignores"] += 1
+            continue
+        if ligne["action"] in ("maj", "inchange") and not mettre_a_jour:
+            compteurs["ignores"] += 1
+            continue
+
+        tarif = Tarif.objects.filter(
+            liste_tarif=ligne["liste"], article=ligne["article_obj"], conditionnement=ligne["cond_obj"],
+        ).first()
+        cree = tarif is None
+        tarif = tarif or Tarif(
+            liste_tarif=ligne["liste"], article=ligne["article_obj"], conditionnement=ligne["cond_obj"],
+        )
+        tarif.prix_unitaire = ligne["montant"]
+        try:
+            tarif.full_clean()
+        except ValidationError:
+            compteurs["erreurs"] += 1
+            continue
+        tarif.save()
+
+        if cree:
+            compteurs["crees"] += 1
+        elif ligne["action"] == "maj":
+            compteurs["modifies"] += 1
 
     return compteurs

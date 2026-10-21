@@ -2,9 +2,10 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Max, Min, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -13,11 +14,14 @@ from django.views.decorators.http import require_POST
 
 from catalogue.models import Article, Conditionnement, Tarif
 from clients.models import Client
-from core.utils import PERIODES, reessayer_si_conflit_bd
+from core.utils import PERIODES, lire_xlsx, reessayer_si_conflit_bd
 
+from . import services
 from .models import (
     Commande,
+    CommandeArchivee,
     Facture,
+    FactureArchivee,
     FactureRetour,
     LigneCommande,
     LigneFactureRetour,
@@ -45,7 +49,16 @@ def _montant(valeur, defaut=Decimal("0")):
 def commande_liste(request):
     statut = request.GET.get("statut", "").strip()
     q = request.GET.get("q", "").strip()
-    commandes = Commande.objects.select_related("client").prefetch_related("lignes")
+    annee_courante = timezone.localdate().year
+
+    annees_disponibles = sorted(
+        {d.year for d in Commande.objects.dates("date", "year")} | {annee_courante},
+        reverse=True,
+    )
+    annee = request.GET.get("annee", "").strip()
+    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else annee_courante
+
+    commandes = Commande.objects.select_related("client").prefetch_related("lignes").filter(date__year=annee)
     if statut:
         commandes = commandes.filter(statut=statut)
     if q:
@@ -60,8 +73,126 @@ def commande_liste(request):
         "statuts": Commande.Statut.choices,
         "statut_sel": statut,
         "q": q,
+        "annee": annee,
+        "annee_courante": annee_courante,
+        "annees_disponibles": annees_disponibles,
     }
     return render(request, "ventes/commande_liste.html", contexte)
+
+
+# --------------------------------------------------------------------------- #
+#  Archives (historique 2013-2023, consultation seule) — reservees aux
+#  administrateurs/superusers (voir core.context_processors.droits_globaux).
+# --------------------------------------------------------------------------- #
+def _est_admin(user):
+    return bool(user.is_superuser or user.groups.filter(name="Administrateur").exists())
+
+
+def _annees_disponibles(queryset, champ_date="date"):
+    """Annees distinctes presentes sur `champ_date`, sans passer par
+    `QuerySet.dates()` : sur ce serveur MySQL, les tables de fuseaux horaires
+    ne sont pas chargees, et `.dates()` sur un DateTimeField (qui a besoin de
+    CONVERT_TZ) renvoie alors silencieusement une seule ligne NULL. Le filtre
+    `__year` n'a lui pas besoin de CONVERT_TZ (il compare par intervalle), on
+    s'en sert donc pour sonder chaque annee entre le min et le max."""
+    bornes = queryset.aggregate(mn=Min(champ_date), mx=Max(champ_date))
+    if not bornes["mn"] or not bornes["mx"]:
+        return []
+    return [
+        annee for annee in range(bornes["mn"].year, bornes["mx"].year + 1)
+        if queryset.filter(**{f"{champ_date}__year": annee}).exists()
+    ]
+
+
+@login_required
+def archive_liste(request):
+    if not _est_admin(request.user):
+        raise PermissionDenied("Module réservé aux administrateurs.")
+
+    q = request.GET.get("q", "").strip()
+
+    annees_disponibles = sorted(
+        {d.year for d in CommandeArchivee.objects.dates("date", "year")}, reverse=True
+    )
+    annee = request.GET.get("annee", "").strip()
+    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else (
+        annees_disponibles[0] if annees_disponibles else None
+    )
+
+    commandes = CommandeArchivee.objects.select_related("client")
+    if annee:
+        commandes = commandes.filter(date__year=annee)
+    if q:
+        commandes = commandes.filter(
+            Q(reference__icontains=q) | Q(client__nomclient__icontains=q)
+        )
+    commandes = commandes.order_by("-date", "-ancien_id")
+
+    page = Paginator(commandes, 50).get_page(request.GET.get("page"))
+
+    return render(request, "ventes/archive_liste.html", {
+        "actif": "archives",
+        "page": page,
+        "q": q,
+        "annee": annee,
+        "annees_disponibles": annees_disponibles,
+    })
+
+
+@login_required
+def archive_detail(request, pk):
+    if not _est_admin(request.user):
+        raise PermissionDenied("Module réservé aux administrateurs.")
+
+    commande = get_object_or_404(
+        CommandeArchivee.objects.select_related("client").prefetch_related("lignes__article"), pk=pk
+    )
+    return render(request, "ventes/archive_detail.html", {"actif": "archives", "commande": commande})
+
+
+@login_required
+def archive_facture_liste(request):
+    if not _est_admin(request.user):
+        raise PermissionDenied("Module réservé aux administrateurs.")
+
+    q = request.GET.get("q", "").strip()
+    annees_disponibles = sorted(
+        {d.year for d in FactureArchivee.objects.dates("date", "year")}, reverse=True
+    )
+    annee = request.GET.get("annee", "").strip()
+    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else (
+        annees_disponibles[0] if annees_disponibles else None
+    )
+
+    factures = FactureArchivee.objects.select_related("client")
+    if annee:
+        factures = factures.filter(date__year=annee)
+    if q:
+        factures = factures.filter(
+            Q(reference__icontains=q) | Q(client__nomclient__icontains=q) | Q(nom_client__icontains=q)
+        )
+    factures = factures.order_by("-date", "-ancien_id")
+
+    page = Paginator(factures, 50).get_page(request.GET.get("page"))
+
+    return render(request, "ventes/archive_facture_liste.html", {
+        "actif": "archives",
+        "page": page,
+        "q": q,
+        "annee": annee,
+        "annees_disponibles": annees_disponibles,
+    })
+
+
+@login_required
+def archive_facture_detail(request, pk):
+    if not _est_admin(request.user):
+        raise PermissionDenied("Module réservé aux administrateurs.")
+
+    facture = get_object_or_404(
+        FactureArchivee.objects.select_related("client").prefetch_related("lignes__article"), pk=pk
+    )
+    return render(request, "ventes/archive_facture_detail.html", {"actif": "archives", "facture": facture})
 
 
 @login_required
@@ -126,6 +257,165 @@ def commande_create(request):
     return render(request, "ventes/commande_form.html", contexte)
 
 
+# --------------------------------------------------------------------------- #
+#  Import Excel des commandes
+# --------------------------------------------------------------------------- #
+SESSION_KEY_IMPORT_COMMANDES = "commandes_import"
+
+
+@login_required
+@permission_required("ventes.add_commande", raise_exception=True)
+def commande_import_modele(request):
+    reponse = HttpResponse(
+        services.generer_modele_commandes(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    reponse["Content-Disposition"] = 'attachment; filename="modele_commandes.xlsx"'
+    return reponse
+
+
+@login_required
+@permission_required("ventes.add_commande", raise_exception=True)
+def commande_import(request):
+    if request.method == "POST":
+        fichier = request.FILES.get("fichier")
+        if not fichier:
+            messages.error(request, "Veuillez sélectionner un fichier Excel (.xlsx).")
+            return redirect("ventes:commande_import")
+        try:
+            entetes, lignes = lire_xlsx(fichier)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("ventes:commande_import")
+
+        if not lignes:
+            messages.error(request, "Fichier vide ou illisible.")
+            return redirect("ventes:commande_import")
+
+        request.session[SESSION_KEY_IMPORT_COMMANDES] = {"nom_fichier": fichier.name, "lignes": lignes}
+        return redirect("ventes:commande_import_apercu")
+
+    return render(request, "ventes/commande_import.html", {"actif": "commandes"})
+
+
+@login_required
+@permission_required("ventes.add_commande", raise_exception=True)
+@reessayer_si_conflit_bd()
+def commande_import_apercu(request):
+    data = request.session.get(SESSION_KEY_IMPORT_COMMANDES)
+    if not data:
+        messages.error(request, "Aucun import en cours. Chargez d'abord un fichier.")
+        return redirect("ventes:commande_import")
+
+    lignes = data["lignes"]
+    action = request.POST.get("action", "") if request.method == "POST" else ""
+
+    if action == "annuler":
+        del request.session[SESSION_KEY_IMPORT_COMMANDES]
+        messages.info(request, "Import annulé.")
+        return redirect("ventes:commande_liste")
+
+    resultats, stats = services.analyser_commandes(lignes)
+
+    if action == "appliquer":
+        compteurs = services.appliquer_commandes_import(lignes)
+        del request.session[SESSION_KEY_IMPORT_COMMANDES]
+        messages.success(
+            request,
+            f"Import terminé : {compteurs['commandes']} commande(s) créée(s) "
+            f"({compteurs['lignes']} ligne(s)), {compteurs['ignorees']} groupe(s) ignoré(s).",
+        )
+        return redirect("ventes:commande_liste")
+
+    return render(request, "ventes/commande_import_apercu.html", {
+        "actif": "commandes",
+        "nom_fichier": data.get("nom_fichier", ""),
+        "resultats": resultats,
+        "stats": stats,
+        "nb_lignes": len(lignes),
+    })
+
+
+# --------------------------------------------------------------------------- #
+#  Import Excel des factures (commande + validation + facturation
+#  immediates : a reserver a la reprise de ventes deja realisees)
+# --------------------------------------------------------------------------- #
+SESSION_KEY_IMPORT_FACTURES = "factures_import"
+
+
+@login_required
+@permission_required("ventes.peut_valider_commande", raise_exception=True)
+def facture_import_modele(request):
+    reponse = HttpResponse(
+        services.generer_modele_factures(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    reponse["Content-Disposition"] = 'attachment; filename="modele_factures.xlsx"'
+    return reponse
+
+
+@login_required
+@permission_required("ventes.peut_valider_commande", raise_exception=True)
+def facture_import(request):
+    if request.method == "POST":
+        fichier = request.FILES.get("fichier")
+        if not fichier:
+            messages.error(request, "Veuillez sélectionner un fichier Excel (.xlsx).")
+            return redirect("ventes:facture_import")
+        try:
+            entetes, lignes = lire_xlsx(fichier)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("ventes:facture_import")
+
+        if not lignes:
+            messages.error(request, "Fichier vide ou illisible.")
+            return redirect("ventes:facture_import")
+
+        request.session[SESSION_KEY_IMPORT_FACTURES] = {"nom_fichier": fichier.name, "lignes": lignes}
+        return redirect("ventes:facture_import_apercu")
+
+    return render(request, "ventes/facture_import.html", {"actif": "factures"})
+
+
+@login_required
+@permission_required("ventes.peut_valider_commande", raise_exception=True)
+@reessayer_si_conflit_bd()
+def facture_import_apercu(request):
+    data = request.session.get(SESSION_KEY_IMPORT_FACTURES)
+    if not data:
+        messages.error(request, "Aucun import en cours. Chargez d'abord un fichier.")
+        return redirect("ventes:facture_import")
+
+    lignes = data["lignes"]
+    action = request.POST.get("action", "") if request.method == "POST" else ""
+
+    if action == "annuler":
+        del request.session[SESSION_KEY_IMPORT_FACTURES]
+        messages.info(request, "Import annulé.")
+        return redirect("ventes:facture_liste")
+
+    resultats, stats = services.analyser_factures(lignes)
+
+    if action == "appliquer":
+        compteurs = services.appliquer_factures_import(lignes, user=request.user)
+        del request.session[SESSION_KEY_IMPORT_FACTURES]
+        messages.success(
+            request,
+            f"Import terminé : {compteurs['factures']} facture(s) créée(s) et validée(s) "
+            f"({compteurs['lignes']} ligne(s)), {compteurs['ignorees']} groupe(s) ignoré(s).",
+        )
+        return redirect("ventes:facture_liste")
+
+    return render(request, "ventes/facture_import_apercu.html", {
+        "actif": "factures",
+        "nom_fichier": data.get("nom_fichier", ""),
+        "resultats": resultats,
+        "stats": stats,
+        "nb_lignes": len(lignes),
+    })
+
+
 @login_required
 def commande_detail(request, pk):
     commande = get_object_or_404(
@@ -134,7 +424,7 @@ def commande_detail(request, pk):
         ),
         pk=pk,
     )
-    facture = getattr(commande, "facture", None)
+    facture = commande.factures.filter(annulee=False).order_by("-date").first()
     contexte = {
         "actif": "commandes",
         "commande": commande,
@@ -197,7 +487,18 @@ def commande_supprimer(request, pk):
 def facture_liste(request):
     statut = request.GET.get("statut", "").strip()  # payee / partielle / non_payee / annulee
     q = request.GET.get("q", "").strip()
-    factures = Facture.objects.select_related("client").prefetch_related("lignes", "paiements")
+    annee_courante = timezone.localdate().year
+
+    annees_disponibles = sorted(
+        set(_annees_disponibles(Facture.objects)) | {annee_courante},
+        reverse=True,
+    )
+    annee = request.GET.get("annee", "").strip()
+    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else annee_courante
+
+    factures = Facture.objects.select_related("client").prefetch_related("lignes", "paiements").filter(
+        date__year=annee
+    )
     if q:
         factures = factures.filter(
             Q(numero__icontains=q) | Q(client__nomclient__icontains=q)
@@ -216,6 +517,9 @@ def facture_liste(request):
         "factures": lignes,
         "statut_sel": statut,
         "q": q,
+        "annee": annee,
+        "annee_courante": annee_courante,
+        "annees_disponibles": annees_disponibles,
     }
     return render(request, "ventes/facture_liste.html", contexte)
 

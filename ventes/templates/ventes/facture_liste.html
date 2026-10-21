@@ -3,15 +3,27 @@
 {% block page_title %}Factures{% endblock %}
 
 {% block topbar_actions %}
+  {% if est_admin %}
+  <a href="{% url 'ventes:archive_facture_liste' %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-archive"></i> Archives (2013-2026)</a>
+  {% endif %}
+  {% if perms.ventes.peut_valider_commande %}
+  <a href="{% url 'ventes:facture_import' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-arrow-up"></i> Importer (Excel)</a>
+  {% endif %}
   <a href="{% url 'ventes:vente_detail_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-upc-scan"></i> Vente au détail</a>
 {% endblock %}
 
 {% block content %}
 <div class="card mb-3"><div class="card-body py-3">
   <form method="get" class="row g-2 align-items-end">
-    <div class="col-sm-5"><label class="form-label mb-1">Recherche</label>
+    <div class="col-sm-2"><label class="form-label mb-1">Année</label>
+      <select name="annee" class="form-select" onchange="this.form.submit()">
+        {% for a in annees_disponibles %}
+          <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}{% if a == annee_courante %} (en cours){% endif %}</option>
+        {% endfor %}
+      </select></div>
+    <div class="col-sm-4"><label class="form-label mb-1">Recherche</label>
       <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Numéro ou client…"></div>
-    <div class="col-sm-4"><label class="form-label mb-1">Statut</label>
+    <div class="col-sm-3"><label class="form-label mb-1">Statut</label>
       <select name="statut" class="form-select">
         <option value="">Tous</option>
         <option value="non_payee" {% if statut_sel == 'non_payee' %}selected{% endif %}>Non payée</option>

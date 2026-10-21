@@ -42,6 +42,10 @@
         <span class="ic"><i class="bi bi-cash-coin"></i></span> Caisse</a>
       <a class="nav-link {% if actif == 'suivi_annuel' %}active{% endif %}" href="{% url 'ventes:releve_annuel_client' %}">
         <span class="ic"><i class="bi bi-journal-text"></i></span> Suivi client (année)</a>
+      {% if est_admin %}
+      <a class="nav-link {% if actif == 'archives' %}active{% endif %}" href="{% url 'ventes:archive_liste' %}">
+        <span class="ic"><i class="bi bi-archive"></i></span> Archives (2013-2023)</a>
+      {% endif %}
 
       <div class="nav-section">Stock</div>
       <a class="nav-link {% if actif == 'stock' %}active{% endif %}" href="{% url 'stock:etat_stock' %}">

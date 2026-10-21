@@ -3,11 +3,14 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from clients.models import ListeTarif
+from core.utils import lire_xlsx
 from stock.models import MouvementStock
 
+from . import services
 from .models import Article, Conditionnement, Tarif, TypeArticle
 
 
@@ -258,3 +261,86 @@ def tarif_form(request, pk=None):
         "conditionnements": Conditionnement.objects.all(),
     }
     return render(request, "catalogue/tarif_form.html", contexte)
+
+
+# --------------------------------------------------------------------------- #
+#  Import Excel des tarifs (prix pour des articles et listes existants)
+# --------------------------------------------------------------------------- #
+SESSION_KEY_IMPORT_TARIFS = "tarifs_import"
+
+
+@login_required
+@permission_required("catalogue.add_tarif", raise_exception=True)
+def tarif_import_modele(request):
+    reponse = HttpResponse(
+        services.generer_modele_tarifs(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    reponse["Content-Disposition"] = 'attachment; filename="modele_tarifs.xlsx"'
+    return reponse
+
+
+@login_required
+@permission_required("catalogue.add_tarif", raise_exception=True)
+def tarif_import(request):
+    if request.method == "POST":
+        fichier = request.FILES.get("fichier")
+        if not fichier:
+            messages.error(request, "Veuillez sélectionner un fichier Excel (.xlsx).")
+            return redirect("catalogue:tarif_import")
+        try:
+            entetes, lignes = lire_xlsx(fichier)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect("catalogue:tarif_import")
+
+        if not lignes:
+            messages.error(request, "Fichier vide ou illisible.")
+            return redirect("catalogue:tarif_import")
+
+        request.session[SESSION_KEY_IMPORT_TARIFS] = {"nom_fichier": fichier.name, "lignes": lignes}
+        return redirect("catalogue:tarif_import_apercu")
+
+    return render(request, "catalogue/tarif_import.html", {"actif": "tarifs"})
+
+
+@login_required
+@permission_required("catalogue.add_tarif", raise_exception=True)
+def tarif_import_apercu(request):
+    data = request.session.get(SESSION_KEY_IMPORT_TARIFS)
+    if not data:
+        messages.error(request, "Aucun import en cours. Chargez d'abord un fichier.")
+        return redirect("catalogue:tarif_import")
+
+    lignes = data["lignes"]
+    action = request.POST.get("action", "") if request.method == "POST" else ""
+
+    if action == "annuler":
+        del request.session[SESSION_KEY_IMPORT_TARIFS]
+        messages.info(request, "Import annulé.")
+        return redirect("clients:tarifs_liste")
+
+    resultats, stats = services.analyser_tarifs(lignes)
+
+    if action == "appliquer":
+        compteurs = services.appliquer_tarifs_import(
+            lignes,
+            creer_nouveaux=bool(request.POST.get("creer_nouveaux")),
+            mettre_a_jour=bool(request.POST.get("mettre_a_jour")),
+        )
+        del request.session[SESSION_KEY_IMPORT_TARIFS]
+        messages.success(
+            request,
+            f"Import terminé : {compteurs['crees']} tarif(s) créé(s), "
+            f"{compteurs['modifies']} mis à jour, {compteurs['ignores']} ligne(s) ignorée(s), "
+            f"{compteurs['erreurs']} en erreur.",
+        )
+        return redirect("clients:tarifs_liste")
+
+    return render(request, "catalogue/tarif_import_apercu.html", {
+        "actif": "tarifs",
+        "nom_fichier": data.get("nom_fichier", ""),
+        "resultats": resultats,
+        "stats": stats,
+        "nb_lignes": len(lignes),
+    })

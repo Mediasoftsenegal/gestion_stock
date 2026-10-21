@@ -2,10 +2,55 @@
 
 import datetime as dt
 import functools
-from decimal import ROUND_HALF_UP, Decimal
+import unicodedata
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.db import IntegrityError, OperationalError, transaction
 from django.utils import timezone
+
+
+# --------------------------------------------------------------------------- #
+#  Parsing tolerant de valeurs issues de fichiers (Excel/CSV)
+# --------------------------------------------------------------------------- #
+def normaliser_texte(valeur):
+    """Normalise un texte pour comparaison tolerante (accents/casse/espaces)."""
+    valeur = (valeur or "").strip()
+    valeur = unicodedata.normalize("NFD", valeur).encode("ascii", "ignore").decode("ascii")
+    valeur = valeur.replace("_", " ").replace("-", " ").replace(".", " ")
+    return " ".join(valeur.upper().split())
+
+
+def parser_decimal(valeur, defaut=Decimal("0")):
+    valeur = str(valeur or "").strip()
+    if not valeur:
+        return defaut
+    valeur = valeur.replace("\xa0", "").replace(" ", "").replace(",", ".")
+    valeur = valeur.replace("FCFA", "").replace("F", "") if valeur.upper().endswith("FCFA") else valeur
+    try:
+        return Decimal(valeur)
+    except (InvalidOperation, ValueError):
+        return defaut
+
+
+def parser_entier(valeur, defaut=0):
+    dec = parser_decimal(valeur, defaut=None)
+    if dec is None:
+        return defaut
+    try:
+        return int(dec.to_integral_value(rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError):
+        return defaut
+
+
+def parser_booleen(valeur, defaut=True):
+    texte = normaliser_texte(valeur)
+    if not texte:
+        return defaut
+    if texte in {"1", "OUI", "O", "TRUE", "VRAI", "ACTIF", "YES", "Y", "X"}:
+        return True
+    if texte in {"0", "NON", "N", "FALSE", "FAUX", "INACTIF", "NO"}:
+        return False
+    return defaut
 
 
 def reessayer_si_conflit_bd(tentatives=3):
@@ -273,3 +318,83 @@ def montant_en_lettres(montant, devise_singulier="franc CFA", devise_pluriel="fr
     devise = devise_singulier if abs(entier) <= 1 else devise_pluriel
     mots = nombre_en_lettres(entier)
     return f"{mots[0].upper()}{mots[1:]} {devise}"
+
+
+# --------------------------------------------------------------------------- #
+#  Import / export Excel (.xlsx, via openpyxl)
+# --------------------------------------------------------------------------- #
+def generer_modele_xlsx(colonnes, exemples=None, feuille="Import"):
+    """Construit un classeur Excel vierge (en-tetes + lignes d'exemple
+    facultatives, grisees) pret a etre rempli puis reimporte.
+
+    `colonnes` : liste de libelles d'en-tete, dans l'ordre attendu.
+    `exemples` : liste de tuples (une ligne d'exemple par tuple), facultatif.
+    Retourne les octets du fichier .xlsx.
+    """
+    from io import BytesIO
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    classeur = Workbook()
+    feuille_active = classeur.active
+    feuille_active.title = feuille
+
+    feuille_active.append(list(colonnes))
+    for cellule in feuille_active[1]:
+        cellule.font = Font(bold=True, color="FFFFFF")
+        cellule.fill = PatternFill("solid", fgColor="9C2B2B")
+
+    for ligne in exemples or []:
+        feuille_active.append(list(ligne))
+    for row in feuille_active.iter_rows(min_row=2):
+        for cellule in row:
+            cellule.font = Font(italic=True, color="808080")
+
+    for index, titre in enumerate(colonnes, start=1):
+        feuille_active.column_dimensions[feuille_active.cell(row=1, column=index).column_letter].width = max(
+            14, len(titre) + 2
+        )
+
+    tampon = BytesIO()
+    classeur.save(tampon)
+    return tampon.getvalue()
+
+
+def lire_xlsx(fichier):
+    """Lit un classeur Excel (.xlsx/.xlsm) et retourne (entetes, lignes).
+
+    `lignes` est une liste de dictionnaires {en-tete (str, en majuscules,
+    sans accents) : valeur brute (str)}. La premiere ligne non vide du
+    classeur est consideree comme l'en-tete.
+    """
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:  # pragma: no cover - depend de l'environnement
+        raise ValueError(
+            "La lecture des fichiers Excel necessite openpyxl (pip install openpyxl)."
+        ) from exc
+
+    def normaliser_entete(valeur):
+        valeur = unicodedata.normalize("NFD", str(valeur or "")).encode("ascii", "ignore").decode("ascii")
+        return " ".join(valeur.upper().split())
+
+    classeur = load_workbook(fichier, data_only=True, read_only=True)
+    feuille = classeur.active
+    iterateur = feuille.iter_rows(values_only=True)
+
+    entetes = []
+    for brut in iterateur:
+        if brut and any(c is not None and str(c).strip() for c in brut):
+            entetes = [normaliser_entete(c) for c in brut]
+            break
+
+    lignes = []
+    for brut in iterateur:
+        if not brut or not any(c is not None and str(c).strip() for c in brut):
+            continue
+        valeurs = ["" if c is None else str(c).strip() for c in brut]
+        valeurs += [""] * (len(entetes) - len(valeurs))
+        lignes.append(dict(zip(entetes, valeurs)))
+
+    return entetes, lignes

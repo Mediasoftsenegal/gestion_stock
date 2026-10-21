@@ -2,22 +2,34 @@
 {% block title %}Commandes{% endblock %}
 {% block page_title %}Commandes{% endblock %}
 {% block topbar_actions %}
+  <a href="{% url 'ventes:commande_import' %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-arrow-up"></i> Importer (Excel)</a>
   <a href="{% url 'ventes:commande_create' %}" class="btn btn-sm btn-primary"><i class="bi bi-cart-plus"></i> Nouvelle commande</a>
 {% endblock %}
 
 {% block content %}
 <div class="card mb-3"><div class="card-body py-3">
   <form method="get" class="row g-2 align-items-end">
-    <div class="col-sm-5"><label class="form-label mb-1">Recherche</label>
+    <div class="col-sm-3"><label class="form-label mb-1">Année</label>
+      <select name="annee" class="form-select" onchange="this.form.submit()">
+        {% for a in annees_disponibles %}
+          <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}{% if a == annee_courante %} (en cours){% endif %}</option>
+        {% endfor %}
+      </select></div>
+    <div class="col-sm-4"><label class="form-label mb-1">Recherche</label>
       <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Référence ou client…"></div>
-    <div class="col-sm-4"><label class="form-label mb-1">Statut</label>
+    <div class="col-sm-3"><label class="form-label mb-1">Statut</label>
       <select name="statut" class="form-select"><option value="">Tous</option>
         {% for val, lib in statuts %}<option value="{{ val }}" {% if statut_sel == val %}selected{% endif %}>{{ lib }}</option>{% endfor %}
       </select></div>
-    <div class="col-sm-3 d-flex gap-2">
+    <div class="col-sm-2 d-flex gap-2">
       <button class="btn btn-primary"><i class="bi bi-search"></i> Filtrer</button>
       <a href="{% url 'ventes:commande_liste' %}" class="btn btn-outline-secondary">Réinit.</a></div>
   </form>
+  {% if est_admin %}
+  <p class="text-muted-2 small mt-2 mb-0">
+    Historique 2013-2023 ? Consultez <a href="{% url 'ventes:archive_liste' %}">les archives</a>.
+  </p>
+  {% endif %}
 </div></div>
 
 <div class="card"><div class="table-responsive">

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monnaie %}
 {% block title %}Factures{% endblock %}
 {% block page_title %}Factures{% endblock %}
 
@@ -47,9 +48,9 @@
         <td class="fw-semibold">{{ f.numero }}</td>
         <td>{{ f.date|date:"d/m/Y" }}</td>
         <td>{{ f.client.nom }}</td>
-        <td class="num">{{ f.montant_total|floatformat:0 }}</td>
-        <td class="num">{{ f.montant_paye|floatformat:0 }}</td>
-        <td class="num">{{ f.reliquat|floatformat:0 }}</td>
+        <td class="num">{{ f.montant_total|format_money_with_currency }}</td>
+        <td class="num">{{ f.montant_paye|format_money_with_currency }}</td>
+        <td class="num">{{ f.reliquat|format_money_with_currency }}</td>
         <td>
           {% if f.annulee %}<span class="badge-soft badge-danger">Annulée</span>
           {% elif f.statut_paiement.value == 'PAYEE' %}<span class="badge-soft badge-ok">Payée</span>

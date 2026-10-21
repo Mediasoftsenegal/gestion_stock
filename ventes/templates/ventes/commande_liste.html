@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load monnaie %}
 {% block title %}Commandes{% endblock %}
 {% block page_title %}Commandes{% endblock %}
 {% block topbar_actions %}
@@ -41,7 +42,7 @@
         <td class="fw-semibold">{{ c.reference }}</td>
         <td>{{ c.date|date:"d/m/Y" }}</td>
         <td>{{ c.client.nom }}</td>
-        <td class="num">{{ c.montant_total|floatformat:0 }}</td>
+        <td class="num">{{ c.montant_total|format_money_with_currency }}</td>
         <td>
           {% if c.statut == 'BON_DE_COMMANDE' %}<span class="badge-soft badge-attente">Bon de commande</span>
           {% elif c.statut == 'VALIDEE' %}<span class="badge-soft badge-ok">Validée</span>

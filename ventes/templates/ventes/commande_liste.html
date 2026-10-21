@@ -10,12 +10,8 @@
 {% block content %}
 <div class="card mb-3"><div class="card-body py-3">
   <form method="get" class="row g-2 align-items-end">
-    <div class="col-sm-3"><label class="form-label mb-1">Année</label>
-      <select name="annee" class="form-select" onchange="this.form.submit()">
-        {% for a in annees_disponibles %}
-          <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}{% if a == annee_courante %} (en cours){% endif %}</option>
-        {% endfor %}
-      </select></div>
+    <div class="col-sm-3"><label class="form-label mb-1">Date</label>
+      <input type="date" name="date" value="{{ date_filtre|date:'Y-m-d' }}" class="form-control" onchange="this.form.submit()"></div>
     <div class="col-sm-4"><label class="form-label mb-1">Recherche</label>
       <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Référence ou client…"></div>
     <div class="col-sm-3"><label class="form-label mb-1">Statut</label>
@@ -54,5 +50,33 @@
       {% endfor %}
     </tbody>
   </table>
-</div></div>
+</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="card-footer">
+  <nav aria-label="Pagination">
+    <ul class="pagination mb-0">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if date_filtre %}&date={{ date_filtre|date:'Y-m-d' }}{% endif %}{% if q %}&q={{ q }}{% endif %}{% if statut_sel %}&statut={{ statut_sel }}{% endif %}">Précédent</a>
+      </li>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ num }}{% if date_filtre %}&date={{ date_filtre|date:'Y-m-d' }}{% endif %}{% if q %}&q={{ q }}{% endif %}{% if statut_sel %}&statut={{ statut_sel }}{% endif %}">{{ num }}</a>
+          </li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if date_filtre %}&date={{ date_filtre|date:'Y-m-d' }}{% endif %}{% if q %}&q={{ q }}{% endif %}{% if statut_sel %}&statut={{ statut_sel }}{% endif %}">Suivant</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}
+</div>
 {% endblock %}

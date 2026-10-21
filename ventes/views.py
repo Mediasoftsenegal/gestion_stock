@@ -1,3 +1,4 @@
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -5,7 +6,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Max, Min, Q
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -49,16 +50,10 @@ def _montant(valeur, defaut=Decimal("0")):
 def commande_liste(request):
     statut = request.GET.get("statut", "").strip()
     q = request.GET.get("q", "").strip()
-    annee_courante = timezone.localdate().year
+    aujourdhui = timezone.localdate()
+    date_filtre = _date_depuis_get(request, "date", aujourdhui)
 
-    annees_disponibles = sorted(
-        {d.year for d in Commande.objects.dates("date", "year")} | {annee_courante},
-        reverse=True,
-    )
-    annee = request.GET.get("annee", "").strip()
-    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else annee_courante
-
-    commandes = Commande.objects.select_related("client").prefetch_related("lignes").filter(date__year=annee)
+    commandes = Commande.objects.select_related("client").prefetch_related("lignes").filter(date=date_filtre)
     if statut:
         commandes = commandes.filter(statut=statut)
     if q:
@@ -67,15 +62,17 @@ def commande_liste(request):
         )
     commandes = commandes.order_by("-date", "-cree_le")
 
+    page_obj = Paginator(commandes, 25).get_page(request.GET.get("page"))
+
     contexte = {
         "actif": "commandes",
-        "commandes": commandes,
+        "commandes": page_obj,
+        "page_obj": page_obj,
         "statuts": Commande.Statut.choices,
         "statut_sel": statut,
         "q": q,
-        "annee": annee,
-        "annee_courante": annee_courante,
-        "annees_disponibles": annees_disponibles,
+        "date_filtre": date_filtre,
+        "aujourdhui": aujourdhui,
     }
     return render(request, "ventes/commande_liste.html", contexte)
 
@@ -88,20 +85,26 @@ def _est_admin(user):
     return bool(user.is_superuser or user.groups.filter(name="Administrateur").exists())
 
 
-def _annees_disponibles(queryset, champ_date="date"):
-    """Annees distinctes presentes sur `champ_date`, sans passer par
-    `QuerySet.dates()` : sur ce serveur MySQL, les tables de fuseaux horaires
-    ne sont pas chargees, et `.dates()` sur un DateTimeField (qui a besoin de
-    CONVERT_TZ) renvoie alors silencieusement une seule ligne NULL. Le filtre
-    `__year` n'a lui pas besoin de CONVERT_TZ (il compare par intervalle), on
-    s'en sert donc pour sonder chaque annee entre le min et le max."""
-    bornes = queryset.aggregate(mn=Min(champ_date), mx=Max(champ_date))
-    if not bornes["mn"] or not bornes["mx"]:
-        return []
-    return [
-        annee for annee in range(bornes["mn"].year, bornes["mx"].year + 1)
-        if queryset.filter(**{f"{champ_date}__year": annee}).exists()
-    ]
+def _date_depuis_get(request, nom_param, defaut):
+    """Parse une date 'YYYY-MM-DD' depuis la query string ; la date du jour
+    (ou `defaut`) si absente/invalide."""
+    brute = request.GET.get(nom_param, "").strip()
+    if not brute:
+        return defaut
+    try:
+        return datetime.strptime(brute, "%Y-%m-%d").date()
+    except ValueError:
+        return defaut
+
+
+def _plage_jour(date_obj):
+    """Bornes [debut, fin) d'une journee pour filtrer un DateTimeField, calculees
+    cote Python (timezone active) plutot qu'avec un lookup __date/.dates() : ceux-ci
+    s'appuient sur CONVERT_TZ, indisponible sur ce serveur MySQL (tables de fuseaux
+    horaires non chargees), et renverraient silencieusement un resultat vide."""
+    debut = timezone.make_aware(datetime.combine(date_obj, time.min))
+    fin = timezone.make_aware(datetime.combine(date_obj + timedelta(days=1), time.min))
+    return debut, fin
 
 
 @login_required
@@ -487,17 +490,12 @@ def commande_supprimer(request, pk):
 def facture_liste(request):
     statut = request.GET.get("statut", "").strip()  # payee / partielle / non_payee / annulee
     q = request.GET.get("q", "").strip()
-    annee_courante = timezone.localdate().year
-
-    annees_disponibles = sorted(
-        set(_annees_disponibles(Facture.objects)) | {annee_courante},
-        reverse=True,
-    )
-    annee = request.GET.get("annee", "").strip()
-    annee = int(annee) if annee.isdigit() and int(annee) in annees_disponibles else annee_courante
+    aujourdhui = timezone.localdate()
+    date_filtre = _date_depuis_get(request, "date", aujourdhui)
+    debut_jour, fin_jour = _plage_jour(date_filtre)
 
     factures = Facture.objects.select_related("client").prefetch_related("lignes", "paiements").filter(
-        date__year=annee
+        date__gte=debut_jour, date__lt=fin_jour
     )
     if q:
         factures = factures.filter(
@@ -512,14 +510,16 @@ def facture_liste(request):
             continue
         lignes.append(f)
 
+    page_obj = Paginator(lignes, 25).get_page(request.GET.get("page"))
+
     contexte = {
         "actif": "factures",
-        "factures": lignes,
+        "factures": page_obj,
+        "page_obj": page_obj,
         "statut_sel": statut,
         "q": q,
-        "annee": annee,
-        "annee_courante": annee_courante,
-        "annees_disponibles": annees_disponibles,
+        "date_filtre": date_filtre,
+        "aujourdhui": aujourdhui,
     }
     return render(request, "ventes/facture_liste.html", contexte)
 

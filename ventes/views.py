@@ -582,6 +582,19 @@ def encaisser(request, pk):
 
 
 @login_required
+@permission_required("ventes.peut_valider_commande", raise_exception=True)
+@require_POST
+def facture_tva(request, pk):
+    facture = get_object_or_404(Facture, pk=pk)
+    if facture.annulee:
+        messages.error(request, "Facture annulée : la TVA ne peut plus être modifiée.")
+        return redirect("ventes:facture_detail", pk=pk)
+    facture.appliquer_tva = bool(request.POST.get("appliquer_tva"))
+    facture.save(update_fields=["appliquer_tva", "modifie_le"])
+    return redirect("ventes:facture_detail", pk=pk)
+
+
+@login_required
 @permission_required("ventes.peut_annuler_facture", raise_exception=True)
 @require_POST
 def facture_annuler(request, pk):

@@ -29,6 +29,7 @@ urlpatterns = [
     path("factures/<int:pk>/pdf/", views.facture_pdf, name="facture_pdf"),
     path("factures/<int:pk>/encaisser/", views.encaisser, name="encaisser"),
     path("factures/<int:pk>/annuler/", views.facture_annuler, name="facture_annuler"),
+    path("factures/<int:pk>/tva/", views.facture_tva, name="facture_tva"),
     # Depot-vente : factures de retour
     path("retours/", views.retour_liste, name="retour_liste"),
     path("factures/<int:pk>/retour/creer/", views.retour_creer, name="retour_creer"),

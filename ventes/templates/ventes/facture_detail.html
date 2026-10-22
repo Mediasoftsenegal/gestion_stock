@@ -76,9 +76,6 @@
           </span>
         </div>
         <div class="d-flex justify-content-between text-muted-2">
-          <span>Nombre de bouteilles</span><span>{{ facture.nombre_bouteilles }}</span>
-        </div>
-        <div class="d-flex justify-content-between text-muted-2">
           <span>Montant brut (avant remise)</span><span>{{ facture.montant_brut|format_money_with_currency }}</span>
         </div>
         {% if facture.montant_remise %}
@@ -97,11 +94,19 @@
         <div class="d-flex justify-content-between text-muted-2">
           <span>Montant HT{% if facture.retour_valide %} dû (quantités vendues){% endif %}</span><span>{{ facture.montant_ht|format_money_with_currency }}</span>
         </div>
-        {% if facture.appliquer_tva %}
-        <div class="d-flex justify-content-between text-muted-2">
-          <span>TVA (18%)</span><span>{{ facture.montant_tva|format_money_with_currency }}</span>
+        <div class="d-flex justify-content-between align-items-center text-muted-2">
+          {% if not facture.annulee and perms.ventes.peut_valider_commande %}
+          <form method="post" action="{% url 'ventes:facture_tva' facture.pk %}" class="form-check mb-0">
+            {% csrf_token %}
+            <input type="checkbox" class="form-check-input" id="tvaCheck" name="appliquer_tva"
+                   {% if facture.appliquer_tva %}checked{% endif %} onchange="this.form.submit()">
+            <label class="form-check-label" for="tvaCheck">TVA (18%)</label>
+          </form>
+          {% else %}
+          <span>TVA (18%)</span>
+          {% endif %}
+          {% if facture.appliquer_tva %}<span>{{ facture.montant_tva|format_money_with_currency }}</span>{% endif %}
         </div>
-        {% endif %}
         <div class="d-flex justify-content-between align-items-center mt-2">
           <span class="fw-semibold">Total facture</span>
           <span class="h4 mb-0" style="font-family:Poppins">{{ facture.montant_total|format_money_with_currency }}</span>

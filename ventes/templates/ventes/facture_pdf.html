@@ -1,4 +1,5 @@
 {% load static %}
+{% load monnaie %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -33,13 +34,13 @@
            background: #f3ead6; color: #9c2b2b; font-size: 7.5px; font-weight: 700;
            text-transform: uppercase; letter-spacing: .4px; }
   .synthese { display: flex; gap: 2%; margin-top: 8px; align-items: flex-start; }
-  .decompte { width: 25%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
+  .decompte { width: 23%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
   .decompte .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px;
                    color: #9c2b2b; font-weight: 700; margin-bottom: 4px; }
   .decompte .item { display: flex; justify-content: space-between; font-size: 8.5px;
                      padding: 1.5px 0; color: #6b6153; }
   .decompte .item strong { color: #2b2118; }
-  .totaux { width: 50%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
+  .totaux { width: 75%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
   .totaux .item { display: flex; justify-content: space-between; font-size: 9px; padding: 2px 0; }
   .totaux .item.total { font-weight: 700; font-size: 11px; color: #9c2b2b;
                          border-top: 2px solid #9c2b2b; margin-top: 3px; padding-top: 5px; }
@@ -105,24 +106,24 @@
       {% for l in facture.lignes.all %}
       <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
         <td class="num">{{ l.quantite }}</td>
-        <td class="num">{{ l.prix_unitaire|floatformat:0 }}</td>
-        <td class="num">{{ l.remise_unitaire|floatformat:0 }}</td>
-        <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|floatformat:0 }}{% else %}—{% endif %}</td>
-        <td class="num">{{ l.montant|floatformat:0 }}</td></tr>
+        <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
+        <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
+        <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>
+        <td class="num">{{ l.montant|format_money_with_currency }}</td></tr>
       {% endfor %}
     </tbody>
     <tfoot>
-      <tr><td colspan="6" class="num">Montant brut</td><td class="num">{{ facture.montant_brut|floatformat:0 }}</td></tr>
+      <tr><td colspan="6" class="num">Montant brut</td><td class="num">{{ facture.montant_brut|format_money_with_currency }}</td></tr>
       {% if facture.montant_remise %}
-      <tr class="remise"><td colspan="6" class="num">Total remises</td><td class="num">- {{ facture.montant_remise|floatformat:0 }}</td></tr>
+      <tr class="remise"><td colspan="6" class="num">Total remises</td><td class="num">- {{ facture.montant_remise|format_money_with_currency }}</td></tr>
       {% endif %}
       {% if facture.retour_valide %}
-      <tr><td colspan="6" class="num">Montant HT facturé</td><td class="num">{{ facture.montant_ht_facture|floatformat:0 }}</td></tr>
-      <tr class="remise"><td colspan="6" class="num">Retour dépôt-vente {{ facture.retour.numero }}</td><td class="num">- {{ facture.montant_retour_ht|floatformat:0 }}</td></tr>
+      <tr><td colspan="6" class="num">Montant HT facturé</td><td class="num">{{ facture.montant_ht_facture|format_money_with_currency }}</td></tr>
+      <tr class="remise"><td colspan="6" class="num">Retour dépôt-vente {{ facture.retour.numero }}</td><td class="num">- {{ facture.montant_retour_ht|format_money_with_currency }}</td></tr>
       {% endif %}
-      <tr><td colspan="6" class="num">Montant HT{% if facture.retour_valide %} dû{% endif %}</td><td class="num">{{ facture.montant_ht|floatformat:0 }}</td></tr>
+      <tr><td colspan="6" class="num">Montant HT{% if facture.retour_valide %} dû{% endif %}</td><td class="num">{{ facture.montant_ht|format_money_with_currency }}</td></tr>
       {% if facture.appliquer_tva %}
-      <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|floatformat:0 }}</td></tr>
+      <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|format_money_with_currency }}</td></tr>
       {% endif %}
     </tfoot>
   </table>
@@ -136,10 +137,10 @@
       {% endfor %}
     </div>
     <div class="totaux">
-      <div class="item total"><span>TOTAL</span><span>{{ facture.montant_total|floatformat:0 }} FCFA</span></div>
-      <div class="item"><span>Payé</span><span>{{ facture.montant_paye|floatformat:0 }}</span></div>
+      <div class="item total"><span>TOTAL</span><span>{{ facture.montant_total|format_money_with_currency }} FCFA</span></div>
+      <div class="item"><span>Payé</span><span>{{ facture.montant_paye|format_money_with_currency }}</span></div>
       {% if not facture.annulee and facture.reliquat > 0 %}
-      <div class="item reliquat"><span>Reliquat</span><span>{{ facture.reliquat|floatformat:0 }}</span></div>
+      <div class="item reliquat"><span>Reliquat</span><span>{{ facture.reliquat|format_money_with_currency }}</span></div>
       {% endif %}
     </div>
   </div>

@@ -6,9 +6,14 @@ mysql-connector-python==26.7.0
 djangorestframework==3.15.2 # API stock temps reel
 whitenoise==6.7.0
 # --- Generation PDF des factures (WeasyPrint) ---
-weasyprint==60.2
-pydyf==0.10.0              
-# IMPORTANT : versions >=0.11 incompatibles avec WeasyPrint 60.2
+# Plafonne a 52.5 : la version du serveur cPanel de production a une
+# libpango-1.0.so.0 trop ancienne (~1.42, 2021) pour WeasyPrint >= ~53,
+# qui appelle pango_context_set_round_glyph_positions (absente de cette
+# version de Pango) -> AttributeError au rendu (erreur 500 sur le PDF).
+# Pas d'acces root sur cPanel pour mettre Pango a jour : on reste sur
+# 52.5, verifiee compatible avec ce serveur (dependances CairoSVG/
+# cairocffi, pas de pydyf).
+weasyprint==52.5
 # WeasyPrint requiert des bibliotheques systeme (Pango, Cairo, GDK-PixBuf).
 # Sur cPanel : verifier leur presence, sinon voir README (section PDF).
 # --- Import Excel (listes de tarifs, tarifs, commandes) ---

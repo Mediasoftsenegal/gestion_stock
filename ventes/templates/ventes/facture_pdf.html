@@ -28,18 +28,22 @@
   thead th.num, tbody td.num, tfoot td.num { text-align: right; }
   tbody td { padding: 4px 5px; border-bottom: 1px solid #e6ddc7; }
   tfoot td { padding: 3px 5px; }
-  tfoot .total td { padding: 5px; font-weight: 700; font-size: 11px; border-top: 2px solid #9c2b2b; }
-  tfoot .total .ligne-total { display: flex; justify-content: space-between; align-items: center; }
   .remise, tbody td.remise, tfoot tr.remise td { color: #d4622a; }
   .depot { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 3px;
            background: #f3ead6; color: #9c2b2b; font-size: 7.5px; font-weight: 700;
            text-transform: uppercase; letter-spacing: .4px; }
-  .decompte { border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; margin-top: 8px; }
+  .synthese { display: flex; gap: 2%; margin-top: 8px; align-items: flex-start; }
+  .decompte { width: 25%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
   .decompte .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px;
                    color: #9c2b2b; font-weight: 700; margin-bottom: 4px; }
   .decompte .item { display: flex; justify-content: space-between; font-size: 8.5px;
                      padding: 1.5px 0; color: #6b6153; }
   .decompte .item strong { color: #2b2118; }
+  .totaux { width: 50%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
+  .totaux .item { display: flex; justify-content: space-between; font-size: 9px; padding: 2px 0; }
+  .totaux .item.total { font-weight: 700; font-size: 11px; color: #9c2b2b;
+                         border-top: 2px solid #9c2b2b; margin-top: 3px; padding-top: 5px; }
+  .totaux .item.reliquat { font-weight: 700; color: #b3261e; }
   .resume { margin-top: 8px; font-size: 8.5px; }
   .resume .lettres { font-style: italic; margin-top: 4px; color: #6b6153; }
   .pied { margin-top: 16px; font-size: 7.5px; color: #6b6153; text-align: center;
@@ -120,19 +124,24 @@
       {% if facture.appliquer_tva %}
       <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|floatformat:0 }}</td></tr>
       {% endif %}
-      <tr class="total"><td colspan="7">
-        <div class="ligne-total"><span>TOTAL</span><span>{{ facture.montant_total|floatformat:0 }} FCFA</span></div>
-      </td></tr>
-      <tr><td colspan="6" class="num">Payé</td><td class="num">{{ facture.montant_paye|floatformat:0 }}</td></tr>
     </tfoot>
   </table>
 
-  <div class="decompte">
-    <div class="lbl">Décompte par conditionnement</div>
-    {% for d in facture.decompte_conditionnements %}
-      <div class="item"><span>{{ d.conditionnement.nom }}</span><strong>{{ d.quantite }}</strong></div>
-    {% empty %}<div class="item"><span>—</span></div>
-    {% endfor %}
+  <div class="synthese">
+    <div class="decompte">
+      <div class="lbl">Décompte par conditionnement</div>
+      {% for d in facture.decompte_conditionnements %}
+        <div class="item"><span>{{ d.conditionnement.nom }}</span><strong>{{ d.quantite }}</strong></div>
+      {% empty %}<div class="item"><span>—</span></div>
+      {% endfor %}
+    </div>
+    <div class="totaux">
+      <div class="item total"><span>TOTAL</span><span>{{ facture.montant_total|floatformat:0 }} FCFA</span></div>
+      <div class="item"><span>Payé</span><span>{{ facture.montant_paye|floatformat:0 }}</span></div>
+      {% if not facture.annulee and facture.reliquat > 0 %}
+      <div class="item reliquat"><span>Reliquat</span><span>{{ facture.reliquat|floatformat:0 }}</span></div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="resume">

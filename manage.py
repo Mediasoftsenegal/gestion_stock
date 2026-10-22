@@ -14,11 +14,11 @@ def main():
             "installez les dependances (pip install -r requirements.txt)."
         ) from exc
 
-    # ⚠️ Import du patch APRÈS avoir défini DJANGO_SETTINGS_MODULE
-    # et APRÈS que Django ait pu être initialisé
+    # Import du patch APRES avoir defini DJANGO_SETTINGS_MODULE
+    # et APRES que Django ait pu etre initialise
     import django
     django.setup()
-
+    from config import db_patch  # noqa: F401
 
     execute_from_command_line(sys.argv)
 

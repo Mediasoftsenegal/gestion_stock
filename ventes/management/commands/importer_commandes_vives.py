@@ -86,11 +86,13 @@ class Command(BaseCommand):
             date_cmd = date_brute.date() if hasattr(date_brute, "date") else None
 
             statut = Commande.Statut.VALIDEE if row.get("ETATCOMMANDE") == 1 else Commande.Statut.BON_DE_COMMANDE
-            taux_tva = parser_decimal(row.get("TAUXTVA"), decimales=0)
 
             a_creer.append(Commande(
+                # TAUXTVA de l'ancien systeme n'est pas un signal fiable (quasi toujours
+                # > 0 sur tout l'historique) : la TVA reste desactivee par defaut, comme
+                # pour toute commande/facture creee depuis l'application.
                 ancien_id=ancien_id, reference=ref, client=client, liste_tarif=client.liste_tarif,
-                date=date_cmd, statut=statut, appliquer_tva=taux_tva > 0,
+                date=date_cmd, statut=statut, appliquer_tva=False,
                 note=str(row.get("OBSERVATIONS") or "").strip(),
             ))
 

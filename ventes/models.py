@@ -59,7 +59,7 @@ class Commande(TimeStampedModel):
         max_length=20, choices=Statut.choices, default=Statut.BON_DE_COMMANDE
     )
     appliquer_tva = models.BooleanField(
-        "Appliquer la TVA (18%)", default=True,
+        "Appliquer la TVA (18%)", default=False,
         help_text="Les prix de la liste de tarifs sont HT ; la TVA est ajoutee si cette case est cochee.",
     )
     note = models.TextField(blank=True)
@@ -307,7 +307,7 @@ class Facture(TimeStampedModel):
     )
     client = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="factures")
     date = models.DateTimeField(default=timezone.now)
-    appliquer_tva = models.BooleanField("Appliquer la TVA (18%)", default=True)
+    appliquer_tva = models.BooleanField("Appliquer la TVA (18%)", default=False)
 
     annulee = models.BooleanField(default=False)
     justificatif_annulation = models.TextField(blank=True)

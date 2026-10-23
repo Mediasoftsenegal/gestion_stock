@@ -19,6 +19,10 @@
   .doc-title h1 { margin: 0; font-size: 15px; color: #9c2b2b; letter-spacing: .5px; }
   .doc-title .num { font-size: 10px; font-weight: 700; }
   .doc-title .date { font-size: 8px; color: #6b6153; }
+  .doc-title .emetteur { margin-top: 3px; font-size: 7.5px; color: #6b6153; }
+  .doc-title .emetteur .lettre { display: inline-block; width: 14px; height: 14px; line-height: 14px;
+                                  text-align: center; border-radius: 50%; background: #9c2b2b; color: #fff;
+                                  font-weight: 700; font-size: 8px; margin-left: 3px; }
   .parties { display: flex; justify-content: space-between; margin-bottom: 10px; }
   .bloc { border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; width: 48%; }
   .bloc .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px; color: #9c2b2b; font-weight: 700; }
@@ -64,13 +68,11 @@
       <div>
         <div class="nom">{{ parametrage.nom_entreprise }}</div>
         {% if parametrage.slogan %}<div class="sous">{{ parametrage.slogan }}</div>{% endif %}
-        {% if parametrage.adresse %}<div class="sous">{{ parametrage.adresse }}</div>{% endif %}
-        {% if parametrage.telephone or parametrage.email %}
-          <div class="sous">{{ parametrage.telephone }}{% if parametrage.telephone and parametrage.email %} · {% endif %}{{ parametrage.email }}</div>
-        {% endif %}
-        {% if parametrage.rccm or parametrage.ninea %}
-          <div class="sous">{% if parametrage.rccm %}RCCM {{ parametrage.rccm }}{% endif %}{% if parametrage.rccm and parametrage.ninea %} · {% endif %}{% if parametrage.ninea %}NINEA {{ parametrage.ninea }}{% endif %}</div>
-        {% endif %}
+        {% if parametrage.rccm %}<div class="sous">{{ parametrage.rccm }}</div>{% endif %}
+        {% if parametrage.ninea %}<div class="sous">NINEA : {{ parametrage.ninea }}</div>{% endif %}
+        {% if parametrage.telephone %}<div class="sous">Tel : {{ parametrage.telephone }}</div>{% endif %}
+        {% if parametrage.email %}<div class="sous">{{ parametrage.email }}</div>{% endif %}
+        {% if parametrage.adresse %}<div class="sous">{{ parametrage.adresse|linebreaksbr }}</div>{% endif %}
       </div>
     </div>
     <div class="doc-title">
@@ -78,6 +80,9 @@
       <div class="num">{{ facture.numero }}</div>
       {% if facture.est_depot_vente %}<div class="depot">Dépôt-vente</div>{% endif %}
       <div class="date">Émise le {{ facture.date|date:"d/m/Y" }}</div>
+      {% if facture.cree_par %}
+      <div class="emetteur">Émetteur <span class="lettre">{{ facture.cree_par.username|slice:":1"|upper }}</span></div>
+      {% endif %}
       {% if facture.annulee %}<div class="annulee">ANNULÉE</div>{% endif %}
     </div>
   </div>

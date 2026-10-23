@@ -12,6 +12,7 @@ urlpatterns = [
     path("commandes/importer/", views.commande_import, name="commande_import"),
     path("commandes/importer/apercu/", views.commande_import_apercu, name="commande_import_apercu"),
     path("commandes/<int:pk>/", views.commande_detail, name="commande_detail"),
+    path("commandes/<int:pk>/pdf/", views.commande_pdf, name="commande_pdf"),
     path("commandes/<int:pk>/valider/", views.commande_valider, name="commande_valider"),
     path("commandes/<int:pk>/generer-facture/", views.commande_generer_facture, name="commande_generer_facture"),
     path("commandes/<int:pk>/supprimer/", views.commande_supprimer, name="commande_supprimer"),
@@ -47,4 +48,6 @@ urlpatterns = [
     # AJAX
     path("ajax/tarifs/", views.ajax_tarifs, name="ajax_tarifs"),
     path("ajax/recherche-article/", views.ajax_recherche_article, name="ajax_recherche_article"),
+    path("ajax/recherche-client/", views.ajax_recherche_client, name="ajax_recherche_client"),
+    path("ajax/recherche-fournisseur/", views.ajax_recherche_fournisseur, name="ajax_recherche_fournisseur"),
 ]

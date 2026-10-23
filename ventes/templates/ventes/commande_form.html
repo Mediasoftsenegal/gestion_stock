@@ -11,12 +11,10 @@
       <div class="card-header">Client</div>
       <div class="card-body">
         <label class="form-label">Client</label>
-        <select name="client" id="clientSelect" class="form-select" required>
-          <option value="">— Sélectionner —</option>
-          {% for c in clients %}
-          <option value="{{ c.id }}" data-liste="{{ c.liste_tarif.nomtarif }}" {% if client_pre == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nom }} ({{ c.codeclient }})</option>
-          {% endfor %}
-        </select>
+        <input type="hidden" name="client" id="clientSelect" value="{{ client_pre }}">
+        <input type="text" id="clientSearchInput" class="form-control" placeholder="Nom ou code du client…"
+               autocomplete="off" value="{% if client_pre_obj %}{{ client_pre_obj.nom }} ({{ client_pre_obj.codeclient }}){% endif %}">
+        <div id="clientSearchResults" class="list-group mt-1" style="max-height:220px;overflow:auto"></div>
         <div class="form-text" id="listeInfo"></div>
 
         <div class="form-check mt-3">
@@ -98,7 +96,8 @@
       <input type="hidden" name="article" class="in-article">
     </td>
     <td><input type="number" min="1" value="1" class="form-control form-control-sm num in-qte" name="quantite"></td>
-    <td class="num pu">0</td>
+    <td><input type="number" min="0" step="1" value="0" class="form-control form-control-sm num in-prix" name="prix"
+               title="Prix modifiable, jamais en dessous du prix de la liste de tarifs"></td>
     <td><input type="number" min="0" step="1" value="0" class="form-control form-control-sm num in-remise" name="remise"
                title="Remise accordée sur une unité de conditionnement"></td>
     <td class="num remise-ligne">0</td>
@@ -111,11 +110,42 @@
 {% block extra_js %}
 <script>
 const tarifsUrl = "{% url 'ventes:ajax_tarifs' %}";
+const rechercheClientUrl = "{% url 'ventes:ajax_recherche_client' %}";
 const TAUX_TVA = 0.18;
 let ARTICLES = [];   // [{article_id, libarticle, conditionnements:[{conditionnement_id,nom,prix,nombre_unites}]}]
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n));
 const clientSelect = document.getElementById('clientSelect');
+const clientSearchInput = document.getElementById('clientSearchInput');
+const clientSearchResults = document.getElementById('clientSearchResults');
+let clientSearchTimer = null;
+
+function selectionnerClient(id, libelle){
+  clientSelect.value = id;
+  clientSearchInput.value = libelle;
+  clientSearchResults.innerHTML = '';
+  loadTarifs(id);
+}
+
+clientSearchInput.addEventListener('input', () => {
+  clearTimeout(clientSearchTimer);
+  clientSelect.value = '';
+  const q = clientSearchInput.value.trim();
+  if(q.length < 2){ clientSearchResults.innerHTML = ''; return; }
+  clientSearchTimer = setTimeout(async () => {
+    const r = await fetch(rechercheClientUrl + '?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    clientSearchResults.innerHTML = '';
+    (data.resultats || []).forEach(c => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action';
+      item.innerHTML = `${c.nom} <span class="text-muted-2 small">(${c.code})${c.liste_tarif ? ' — ' + c.liste_tarif : ''}</span>`;
+      item.addEventListener('click', () => selectionnerClient(c.client_id, `${c.nom} (${c.code})`));
+      clientSearchResults.appendChild(item);
+    });
+  }, 250);
+});
 const appliquerTvaCheckbox = document.getElementById('appliquerTva');
 const btnAdd = document.getElementById('btnAdd');
 const btnSave = document.getElementById('btnSave');
@@ -151,7 +181,8 @@ function addRow(){
     selA.appendChild(o);
   });
   selA.addEventListener('change', () => onArticle(tr));
-  tr.querySelector('.sel-cond').addEventListener('change', () => recalcRow(tr));
+  tr.querySelector('.sel-cond').addEventListener('change', () => onConditionnement(tr));
+  tr.querySelector('.in-prix').addEventListener('input', () => onPrixChange(tr));
   tr.querySelector('.in-qte').addEventListener('input', () => recalcRow(tr));
   tr.querySelector('.in-remise').addEventListener('input', () => recalcRow(tr));
   tr.querySelector('.btn-del').addEventListener('click', () => { tr.remove(); recalc(); });
@@ -174,12 +205,31 @@ function onArticle(tr){
       selC.appendChild(o);
     });
   }
+  onConditionnement(tr);
+}
+
+function onConditionnement(tr){
+  // Le prix de la liste de tarifs est le plancher : il est propose par
+  // defaut, modifiable a la hausse seulement (negociation côté client).
+  const opt = tr.querySelector('.sel-cond').selectedOptions[0];
+  const plancher = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
+  const inPrix = tr.querySelector('.in-prix');
+  inPrix.dataset.plancher = plancher;
+  inPrix.min = plancher || 0;
+  inPrix.value = plancher;
+  recalcRow(tr);
+}
+
+function onPrixChange(tr){
+  const inPrix = tr.querySelector('.in-prix');
+  const plancher = parseFloat(inPrix.dataset.plancher || '0');
+  let prix = parseFloat(inPrix.value || '0');
+  if(isNaN(prix) || prix < plancher){ prix = plancher; inPrix.value = plancher; }
   recalcRow(tr);
 }
 
 function recalcRow(tr){
-  const opt = tr.querySelector('.sel-cond').selectedOptions[0];
-  const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
+  const prix = parseFloat(tr.querySelector('.in-prix').value || '0');
   const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
   const inRemise = tr.querySelector('.in-remise');
   let remise = parseFloat(inRemise.value || '0');
@@ -187,7 +237,6 @@ function recalcRow(tr){
   // La remise ne peut jamais depasser le prix unitaire.
   if(prix > 0 && remise > prix){ remise = prix; inRemise.value = prix; }
   inRemise.max = prix || null;
-  tr.querySelector('.pu').textContent = fmt(prix);
   tr.querySelector('.remise-ligne').textContent = fmt(remise * qte);
   tr.querySelector('.montant').textContent = fmt((prix - remise) * qte);
   recalc();
@@ -198,7 +247,7 @@ function recalc(){
   const decompte = new Map();  // nom conditionnement -> quantite
   body.querySelectorAll('.ligne').forEach(tr => {
     const opt = tr.querySelector('.sel-cond').selectedOptions[0];
-    const prix = opt && opt.dataset.prix ? parseFloat(opt.dataset.prix) : 0;
+    const prix = parseFloat(tr.querySelector('.in-prix').value || '0');
     const unites = opt && opt.dataset.unites ? parseInt(opt.dataset.unites, 10) : 0;
     const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
     let remise = parseFloat(tr.querySelector('.in-remise').value || '0');
@@ -232,10 +281,10 @@ function recalc(){
   if(body.querySelectorAll('.ligne').length === 0){ emptyRow.style.display = ''; }
 }
 
-clientSelect.addEventListener('change', e => loadTarifs(e.target.value));
 appliquerTvaCheckbox.addEventListener('change', recalc);
 btnAdd.addEventListener('click', addRow);
 document.getElementById('commandeForm').addEventListener('submit', e => {
+  if(!clientSelect.value){ e.preventDefault(); alert("Sélectionnez un client."); return; }
   if(body.querySelectorAll('.ligne').length === 0){ e.preventDefault(); alert("Ajoutez au moins une ligne."); }
 });
 // Pre-selection eventuelle (depuis fiche client)

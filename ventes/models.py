@@ -230,14 +230,23 @@ class LigneCommande(models.Model):
         verbose_name_plural = "lignes de commande"
 
     def save(self, *args, **kwargs):
+        prix_tarif = None
+        if self.commande_id and self.article_id and self.conditionnement_id:
+            prix_tarif = get_prix(self.commande.liste_tarif, self.article, self.conditionnement)
         if self.prix_unitaire in (None, "") and self.commande_id:
-            prix = get_prix(self.commande.liste_tarif, self.article, self.conditionnement)
-            if prix is None:
+            if prix_tarif is None:
                 raise ValidationError(
                     f"Aucun tarif defini pour {self.article} / {self.conditionnement} "
                     f"dans la liste {self.commande.liste_tarif}."
                 )
-            self.prix_unitaire = prix
+            self.prix_unitaire = prix_tarif
+        elif prix_tarif is not None and Decimal(self.prix_unitaire) < prix_tarif:
+            # Le prix peut etre modifie (negociation), mais jamais en dessous du
+            # prix de vente de la liste de tarifs du client.
+            raise ValidationError(
+                f"Le prix de vente ({self.prix_unitaire}) ne peut pas etre inferieur au prix "
+                f"de la liste de tarifs ({prix_tarif}) pour {self.article} / {self.conditionnement}."
+            )
         # Remise : montant par conditionnement, jamais negative ni superieure au prix.
         if self.remise_unitaire in (None, ""):
             self.remise_unitaire = Decimal("0")

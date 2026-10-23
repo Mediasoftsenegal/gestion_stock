@@ -2,7 +2,10 @@
 {% load monnaie %}
 {% block title %}{{ commande.reference }}{% endblock %}
 {% block page_title %}Commande {{ commande.reference }}{% endblock %}
-{% block topbar_actions %}<a href="{% url 'ventes:commande_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour</a>{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'ventes:commande_pdf' commande.pk %}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-pdf"></i> PDF</a>
+  <a href="{% url 'ventes:commande_liste' %}" class="btn btn-sm btn-outline-secondary">← Retour</a>
+{% endblock %}
 
 {% block content %}
 <div class="row g-3">

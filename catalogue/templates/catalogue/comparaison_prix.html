@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load monnaie %}
+{% block title %}Comparaison prix d'achat / vente{% endblock %}
+{% block page_title %}Comparaison prix d'achat / vente{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-sm-6"><label class="form-label mb-1">Article</label>
+      <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Nom ou code de l'article…"></div>
+    <div class="col-sm-4"><label class="form-label mb-1">Type d'article</label>
+      <select name="type" class="form-select">
+        <option value="">Tous</option>
+        {% for t in types %}
+          <option value="{{ t.id }}" {% if type_id == t.id|stringformat:'s' %}selected{% endif %}>{{ t.nom }}</option>
+        {% endfor %}
+      </select></div>
+    <div class="col-sm-2 d-flex gap-2">
+      <button class="btn btn-primary"><i class="bi bi-search"></i> Comparer</button>
+    </div>
+  </form>
+</div></div>
+
+{% if not q and not type_id %}
+<div class="alert alert-info">Recherchez un article (nom/code) ou choisissez un type d'article pour afficher la comparaison prix d'achat / prix de vente.</div>
+{% elif not resultats %}
+<div class="alert alert-warning">Aucun article trouvé.</div>
+{% endif %}
+
+{% for r in resultats %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">{{ r.article.libarticle }}</span>
+    <span class="text-muted-2 small">{{ r.article.code }}{% if r.article.type_article %} · {{ r.article.type_article.nom }}{% endif %}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Conditionnement</th><th class="num">Prix d'achat</th><th>Prix de vente</th><th class="num">Marge (plus bas)</th></tr></thead>
+      <tbody>
+        {% for l in r.lignes %}
+        <tr>
+          <td>{{ l.conditionnement }}</td>
+          <td class="num">{{ l.prix_achat|format_money_with_currency }}</td>
+          <td>
+            {% for v in l.ventes %}
+              <div class="small">{{ v.liste }} : <strong>{{ v.prix|format_money_with_currency }}</strong></div>
+            {% empty %}<span class="text-muted-2">— aucun tarif —</span>{% endfor %}
+          </td>
+          <td class="num {% if l.marge is not None and l.marge < 0 %}text-danger{% endif %}">
+            {% if l.marge is not None %}{{ l.marge|format_money_with_currency }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

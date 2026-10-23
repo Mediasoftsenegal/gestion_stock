@@ -659,8 +659,7 @@ def appro_creer(request):
         messages.success(request, f"Approvisionnement {appro.reference} créé.")
         return redirect("stock:appro_editer", pk=appro.pk)
 
-    fournisseurs = Fournisseur.objects.prefetch_related("taxes").order_by("nom_fournisseur")
-    return render(request, "stock/appro_creer.html", {"fournisseurs": fournisseurs})
+    return render(request, "stock/appro_creer.html", {})
 
 
 @login_required
@@ -734,7 +733,7 @@ def appro_editer(request, pk):
         return redirect("stock:appro_editer", pk=appro.pk)
 
     lignes = appro.lignes.select_related("article", "conditionnement")
-    articles = Article.objects.filter(actif=True).order_by("libarticle")
+    articles = Article.objects.filter(actif=True, fournisseur=appro.fournisseur).order_by("libarticle")
     conditionnements = Conditionnement.objects.all()
     taxes_fournisseur = appro.fournisseur.taxes.all()
     taxes_selectionnees_ids = set(appro.taxes.values_list("id", flat=True))

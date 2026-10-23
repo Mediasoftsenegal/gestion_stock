@@ -1,0 +1,152 @@
+{% load static %}
+{% load monnaie %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ commande.reference }}</title>
+<style>
+  @page { size: A5 portrait; margin: 1cm 0.9cm; }
+  * { font-family: "Helvetica", "Arial", sans-serif; }
+  body { color: #2b2118; font-size: 9px; }
+  .entete { display: flex; justify-content: space-between; align-items: flex-start;
+            border-bottom: 2px solid #9c2b2b; padding-bottom: 8px; margin-bottom: 12px; }
+  .marque { display: flex; gap: 8px; align-items: center; }
+  .marque img { width: 38px; height: 38px; object-fit: contain; }
+  .marque .nom { font-size: 13px; font-weight: 700; color: #9c2b2b; }
+  .marque .sous { font-size: 8px; color: #6b6153; }
+  .doc-title { text-align: right; }
+  .doc-title h1 { margin: 0; font-size: 15px; color: #9c2b2b; letter-spacing: .5px; }
+  .doc-title .num { font-size: 10px; font-weight: 700; }
+  .doc-title .date { font-size: 8px; color: #6b6153; }
+  .doc-title .emetteur { margin-top: 3px; font-size: 7.5px; color: #6b6153; }
+  .doc-title .emetteur .lettre { display: inline-block; width: 14px; height: 14px; line-height: 14px;
+                                  text-align: center; border-radius: 50%; background: #9c2b2b; color: #fff;
+                                  font-weight: 700; font-size: 8px; margin-left: 3px; }
+  .parties { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .bloc { border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; width: 48%; }
+  .bloc .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px; color: #9c2b2b; font-weight: 700; }
+  .bloc .val { font-size: 9.5px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  thead th { color: #9c2b2b; font-size: 8px; text-transform: uppercase;
+             letter-spacing: .3px; padding: 4px 5px; text-align: left; border-bottom: 2px solid #9c2b2b; }
+  thead th.num, tbody td.num, tfoot td.num { text-align: right; }
+  tbody td { padding: 4px 5px; border-bottom: 1px solid #e6ddc7; }
+  tfoot td { padding: 3px 5px; }
+  .remise, tbody td.remise, tfoot tr.remise td { color: #d4622a; }
+  .synthese { display: flex; gap: 2%; margin-top: 8px; align-items: flex-start; }
+  .decompte { width: 23%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
+  .decompte .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .4px;
+                   color: #9c2b2b; font-weight: 700; margin-bottom: 4px; }
+  .decompte .item { display: flex; justify-content: space-between; font-size: 8.5px;
+                     padding: 1.5px 0; color: #6b6153; }
+  .decompte .item strong { color: #2b2118; }
+  .totaux { width: 75%; border: 1px solid #e6ddc7; border-radius: 5px; padding: 7px 8px; }
+  .totaux .item { display: flex; justify-content: space-between; font-size: 9px; padding: 2px 0; }
+  .totaux .item.total { font-weight: 700; font-size: 11px; color: #9c2b2b;
+                         border-top: 2px solid #9c2b2b; margin-top: 3px; padding-top: 5px; }
+  .resume { margin-top: 8px; font-size: 8.5px; }
+  .resume .lettres { font-style: italic; margin-top: 4px; color: #6b6153; }
+  .pied { margin-top: 16px; font-size: 7.5px; color: #6b6153; text-align: center;
+          border-top: 1px solid #e6ddc7; padding-top: 6px; }
+  .annulee { color: #b3261e; font-weight: 700; border: 2px solid #b3261e;
+             display: inline-block; padding: 2px 8px; border-radius: 4px; transform: rotate(-4deg); }
+  .statut-badge { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 3px;
+                  background: #f3ead6; color: #9c2b2b; font-size: 7.5px; font-weight: 700;
+                  text-transform: uppercase; letter-spacing: .4px; }
+</style>
+</head>
+<body>
+  <div class="entete">
+    <div class="marque">
+      {% if parametrage.logo %}
+        <img src="{{ parametrage.logo.url }}" alt="">
+      {% else %}
+        <img src="{% static 'img/logo.jpg' %}" alt="">
+      {% endif %}
+      <div>
+        <div class="nom">{{ parametrage.nom_entreprise }}</div>
+        {% if parametrage.slogan %}<div class="sous">{{ parametrage.slogan }}</div>{% endif %}
+        {% if parametrage.rccm %}<div class="sous">{{ parametrage.rccm }}</div>{% endif %}
+        {% if parametrage.ninea %}<div class="sous">NINEA : {{ parametrage.ninea }}</div>{% endif %}
+        {% if parametrage.telephone %}<div class="sous">Tel : {{ parametrage.telephone }}</div>{% endif %}
+        {% if parametrage.email %}<div class="sous">{{ parametrage.email }}</div>{% endif %}
+        {% if parametrage.adresse %}<div class="sous">{{ parametrage.adresse|linebreaksbr }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>BON DE COMMANDE</h1>
+      <div class="num">{{ commande.reference }}</div>
+      {% if commande.statut == 'VALIDEE' %}<div class="statut-badge">Validée</div>
+      {% elif commande.statut == 'ANNULEE' %}<div class="statut-badge">Annulée</div>{% endif %}
+      <div class="date">Émise le {{ commande.date|date:"d/m/Y" }}</div>
+      {% if commande.cree_par %}
+      <div class="emetteur">Émetteur <span class="lettre">{{ commande.cree_par.username|slice:":1"|upper }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="bloc">
+      <div class="lbl">Client</div>
+      <div class="val">{{ commande.client.nom }}</div>
+      <div>{{ commande.client.codeclient }}{% if commande.client.telephone %} · {{ commande.client.telephone }}{% endif %}</div>
+      {% if commande.client.adresse %}<div>{{ commande.client.adresse }}</div>{% endif %}
+    </div>
+    <div class="bloc">
+      <div class="lbl">Note</div>
+      <div class="val">{{ commande.note|default:"—" }}</div>
+    </div>
+  </div>
+
+  <table>
+    <colgroup>
+      <col style="width:26%"><col style="width:10%"><col style="width:8%">
+      <col style="width:15%"><col style="width:15%"><col style="width:13%"><col style="width:13%">
+    </colgroup>
+    <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th>
+      <th class="num">P.U.</th><th class="num">Rem. unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
+    <tbody>
+      {% for l in commande.lignes.all %}
+      <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+        <td class="num">{{ l.quantite }}</td>
+        <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
+        <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
+        <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>
+        <td class="num">{{ l.montant|format_money_with_currency }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="6" class="num">Montant brut</td><td class="num">{{ commande.montant_brut|format_money_with_currency }}</td></tr>
+      {% if commande.montant_remise %}
+      <tr class="remise"><td colspan="6" class="num">Total remises</td><td class="num">- {{ commande.montant_remise|format_money_with_currency }}</td></tr>
+      {% endif %}
+      <tr><td colspan="6" class="num">Montant HT</td><td class="num">{{ commande.montant_ht|format_money_with_currency }}</td></tr>
+      {% if commande.appliquer_tva %}
+      <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ commande.montant_tva|format_money_with_currency }}</td></tr>
+      {% endif %}
+    </tfoot>
+  </table>
+
+  <div class="synthese">
+    <div class="decompte">
+      <div class="lbl">Décompte par conditionnement</div>
+      {% for d in commande.decompte_conditionnements %}
+        <div class="item"><span>{{ d.conditionnement.nom }}</span><strong>{{ d.quantite }}</strong></div>
+      {% empty %}<div class="item"><span>—</span></div>
+      {% endfor %}
+    </div>
+    <div class="totaux">
+      <div class="item total"><span>TOTAL</span><span>{{ commande.montant_total|format_money_with_currency }} FCFA</span></div>
+    </div>
+  </div>
+
+  <div class="resume">
+    <div class="lettres">Arrêtée à la somme de : {{ commande.montant_en_lettres }}.</div>
+  </div>
+
+  <div class="pied">
+    Document généré le {{ now|date:"d/m/Y à H:i" }} · {{ parametrage.nom_entreprise }}{% if parametrage.slogan %} — {{ parametrage.slogan }}{% endif %}
+  </div>
+</body>
+</html>

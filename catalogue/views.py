@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -344,3 +346,67 @@ def tarif_import_apercu(request):
         "stats": stats,
         "nb_lignes": len(lignes),
     })
+
+
+# --------------------------------------------------------------------------- #
+#  Comparaison prix d'achat / prix de vente
+# --------------------------------------------------------------------------- #
+@login_required
+def comparaison_prix(request):
+    """Compare, pour un article (ou tous les articles d'un type), le prix
+    d'achat et le(s) prix de vente (tarifs), en unite de base (bouteille)
+    et par conditionnement."""
+    q = request.GET.get("q", "").strip()
+    type_id = request.GET.get("type", "").strip()
+
+    articles = Article.objects.filter(actif=True).select_related("type_article").prefetch_related(
+        "conditionnements", "tarifs__liste_tarif", "tarifs__conditionnement"
+    )
+    if q:
+        articles = articles.filter(Q(libarticle__icontains=q) | Q(code__icontains=q))
+    if type_id.isdigit():
+        articles = articles.filter(type_article_id=type_id)
+    articles = articles.order_by("libarticle")[:30] if (q or type_id) else Article.objects.none()
+
+    resultats = []
+    for a in articles:
+        tarifs_par_cond = {}
+        for t in a.tarifs.all():
+            tarifs_par_cond.setdefault(t.conditionnement_id, []).append(t)
+
+        lignes = []
+        prix_vente_base = a.prix_bouteille or Decimal("0")
+        prix_achat_base = a.prix_achat
+        lignes.append({
+            "conditionnement": "Bouteille (unité de base)",
+            "prix_achat": prix_achat_base,
+            "ventes": [{"liste": "Prix de référence (comptoir)", "prix": prix_vente_base}] if prix_vente_base else [],
+            "marge": prix_vente_base - prix_achat_base if prix_vente_base else None,
+        })
+        for cond in a.conditionnements.all():
+            prix_achat_cond = prix_achat_base * cond.nombre_unites
+            tarifs_cond = sorted(
+                tarifs_par_cond.get(cond.id, []), key=lambda t: t.liste_tarif.nomtarif
+            )
+            ventes = [{"liste": t.liste_tarif.nomtarif, "prix": t.prix_unitaire} for t in tarifs_cond]
+            marge = None
+            if ventes:
+                prix_min = min(v["prix"] for v in ventes)
+                marge = prix_min - prix_achat_cond
+            lignes.append({
+                "conditionnement": str(cond),
+                "prix_achat": prix_achat_cond,
+                "ventes": ventes,
+                "marge": marge,
+            })
+
+        resultats.append({"article": a, "lignes": lignes})
+
+    contexte = {
+        "actif": "comparaison_prix",
+        "q": q,
+        "type_id": type_id,
+        "types": TypeArticle.objects.order_by("nom"),
+        "resultats": resultats,
+    }
+    return render(request, "catalogue/comparaison_prix.html", contexte)

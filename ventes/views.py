@@ -210,8 +210,10 @@ def commande_create(request):
         conds = request.POST.getlist("conditionnement")
         quantites = request.POST.getlist("quantite")
         remises = request.POST.getlist("remise")
-        # Aligne la liste des remises sur celle des lignes (champ optionnel).
+        prix_saisis = request.POST.getlist("prix")
+        # Aligne les listes optionnelles sur celle des lignes.
         remises += [""] * (len(articles) - len(remises))
+        prix_saisis += [""] * (len(articles) - len(prix_saisis))
 
         client = get_object_or_404(Client, pk=client_id) if client_id else None
         if not client:
@@ -219,8 +221,8 @@ def commande_create(request):
             return redirect("ventes:commande_create")
 
         lignes_valides = [
-            (a, c, qv, rm)
-            for a, c, qv, rm in zip(articles, conds, quantites, remises)
+            (a, c, qv, rm, pu)
+            for a, c, qv, rm, pu in zip(articles, conds, quantites, remises, prix_saisis)
             if a and c and qv and qv.isdigit() and int(qv) > 0
         ]
         if not lignes_valides:
@@ -233,15 +235,18 @@ def commande_create(request):
                     client=client, date=timezone.localdate(), note=note,
                     appliquer_tva=appliquer_tva, cree_par=request.user,
                 )
-                for a, c, qv, rm in lignes_valides:
+                for a, c, qv, rm, pu in lignes_valides:
                     ligne = LigneCommande(
                         commande=commande,
                         article_id=int(a),
                         conditionnement_id=int(c),
                         quantite=int(qv),
                         remise_unitaire=_montant(rm),
+                        # Prix modifiable (negociation) ; vide = prix de la liste
+                        # de tarifs (garde-fou plancher applique dans save()).
+                        prix_unitaire=_montant(pu) if pu.strip() else None,
                     )
-                    ligne.save()  # prix auto depuis la liste de tarifs + garde-fou plancher
+                    ligne.save()
             messages.success(
                 request, f"Bon de commande {commande.reference} créé."
             )
@@ -252,10 +257,11 @@ def commande_create(request):
 
     # GET
     client_pre = request.GET.get("client")
+    client_pre_obj = Client.objects.filter(pk=client_pre, actif=True).first() if client_pre else None
     contexte = {
         "actif": "commandes",
-        "clients": Client.objects.filter(actif=True).select_related("liste_tarif").order_by("nomclient"),
-        "client_pre": client_pre,
+        "client_pre": client_pre_obj.pk if client_pre_obj else "",
+        "client_pre_obj": client_pre_obj,
     }
     return render(request, "ventes/commande_form.html", contexte)
 
@@ -636,6 +642,32 @@ def facture_pdf(request, pk):
     return resp
 
 
+@login_required
+def commande_pdf(request, pk):
+    commande = get_object_or_404(
+        Commande.objects.select_related("client").prefetch_related(
+            "lignes__article", "lignes__conditionnement"
+        ),
+        pk=pk,
+    )
+    from core.models import Parametrage
+
+    html = render_to_string(
+        "ventes/commande_pdf.html",
+        {"commande": commande, "now": timezone.now(), "parametrage": Parametrage.get_solo()},
+        request=request,
+    )
+    try:
+        from weasyprint import HTML
+    except ImportError:
+        return HttpResponse(html)
+
+    pdf = HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+    resp = HttpResponse(pdf, content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{commande.reference}.pdf"'
+    return resp
+
+
 # --------------------------------------------------------------------------- #
 #  Etat de suivi client (filtrable par periode)
 # --------------------------------------------------------------------------- #
@@ -775,6 +807,48 @@ def ajax_recherche_article(request):
         })
 
     return JsonResponse({"resultats": []})
+
+
+@login_required
+def ajax_recherche_client(request):
+    """Recherche un client par nom/code, pour la saisie de commande."""
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"resultats": []})
+
+    clients = Client.objects.filter(
+        Q(nomclient__icontains=q) | Q(codeclient__icontains=q),
+        actif=True,
+    ).select_related("liste_tarif").order_by("nomclient")[:15]
+    return JsonResponse({
+        "resultats": [
+            {
+                "client_id": c.id, "nom": c.nom, "code": c.codeclient,
+                "liste_tarif": c.liste_tarif.nomtarif if c.liste_tarif else "",
+            }
+            for c in clients
+        ]
+    })
+
+
+@login_required
+def ajax_recherche_fournisseur(request):
+    """Recherche un fournisseur par nom/code, pour la saisie d'approvisionnement."""
+    from stock.models import Fournisseur
+
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"resultats": []})
+
+    fournisseurs = Fournisseur.objects.filter(
+        Q(nom_fournisseur__icontains=q) | Q(numerofour__icontains=q)
+    ).order_by("nom_fournisseur")[:15]
+    return JsonResponse({
+        "resultats": [
+            {"fournisseur_id": f.id, "nom": f.nom_fournisseur, "code": f.numerofour}
+            for f in fournisseurs
+        ]
+    })
 
 
 @login_required

@@ -787,6 +787,12 @@ def ajax_recherche_article(request):
 
     def prix_vente(article):
         prix = get_prix(liste_boutique, article, cond_unite)
+        if prix is None:
+            # Repli : l'article peut etre tarife sur un autre conditionnement
+            # unitaire (Pack, Canette...) plutot que Bouteille.
+            autre_cond = article.conditionnements.filter(nombre_unites=1).exclude(pk=cond_unite.pk).first()
+            if autre_cond:
+                prix = get_prix(liste_boutique, article, autre_cond)
         return prix if prix is not None else article.prix_bouteille
 
     if code_barre:
@@ -903,6 +909,14 @@ def vente_detail_create(request):
                 for a, qv in lignes_valides:
                     article = get_object_or_404(Article, pk=int(a))
                     prix = get_prix(liste_boutique, article, cond_unite)
+                    if prix is None:
+                        # Repli : article tarife sur un autre conditionnement
+                        # unitaire (Pack, Canette...) plutot que Bouteille.
+                        autre_cond = article.conditionnements.filter(
+                            nombre_unites=1
+                        ).exclude(pk=cond_unite.pk).first()
+                        if autre_cond:
+                            prix = get_prix(liste_boutique, article, autre_cond)
                     ligne = LigneCommande(
                         commande=commande,
                         article=article,

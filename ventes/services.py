@@ -70,9 +70,19 @@ def client_comptoir():
 
 def conditionnement_unite():
     """Conditionnement 'unite' (nombre_unites=1) utilise pour les ventes au
-    detail : chaque article scanne compte pour une unite de base."""
+    detail : chaque article scanne compte pour une unite de base.
+
+    Plusieurs conditionnements partagent nombre_unites=1 (Bouteille, Pack,
+    Canette, Carton...) : « Bouteille » est de tres loin le plus utilise
+    dans les tarifs BOUTIQUE, on le privilegie explicitement plutot que de
+    prendre le premier conditionnement unitaire venu (id le plus bas),
+    qui ne correspond pas forcement au tarif reellement saisi pour
+    l'article."""
     from catalogue.models import Conditionnement
 
+    cond = Conditionnement.objects.filter(nombre_unites=1, nom__iexact="Bouteille").first()
+    if cond:
+        return cond
     cond = Conditionnement.objects.filter(nombre_unites=1).order_by("id").first()
     if cond:
         return cond

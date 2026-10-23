@@ -871,12 +871,13 @@ def vente_detail_create(request):
     """Vente au detail (comptoir) : panier scanne/recherche, encaissement
     immediat au comptant, decompte du stock, ticket imprimable en retour."""
     if request.method == "POST":
-        client_id = request.POST.get("client")
         mode = request.POST.get("mode", Paiement.Mode.ESPECES)
         articles = request.POST.getlist("article")
         quantites = request.POST.getlist("quantite")
 
-        client = get_object_or_404(Client, pk=client_id) if client_id else client_comptoir()
+        # La vente au detail pointe uniquement sur BOUTIQUE KH YALLA :
+        # aucun autre client n'est accepte pour ce flux.
+        client = client_comptoir()
 
         lignes_valides = [
             (a, qv)
@@ -930,7 +931,6 @@ def vente_detail_create(request):
 
     contexte = {
         "actif": "vente_detail",
-        "clients": Client.objects.filter(actif=True).order_by("nomclient"),
         "modes": Paiement.Mode.choices,
     }
     return render(request, "ventes/vente_detail.html", contexte)

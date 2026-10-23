@@ -20,11 +20,10 @@
         <div id="searchResults" class="list-group mt-1" style="max-height:220px;overflow:auto"></div>
       </div>
       <div class="card-body border-top">
-        <label class="form-label">Client (optionnel)</label>
-        <select name="client" class="form-select mb-3">
-          <option value="">— Vente comptoir (par défaut) —</option>
-          {% for c in clients %}<option value="{{ c.id }}">{{ c.nom }}</option>{% endfor %}
-        </select>
+        <div class="mb-3">
+          <label class="form-label mb-1">Client</label>
+          <div class="form-control-plaintext py-0 fw-semibold">BOUTIQUE KH YALLA</div>
+        </div>
         <label class="form-label">Mode de paiement (comptant)</label>
         <select name="mode" class="form-select">
           {% for val, lib in modes %}<option value="{{ val }}">{{ lib }}</option>{% endfor %}

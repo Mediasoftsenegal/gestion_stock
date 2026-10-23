@@ -36,12 +36,17 @@ def liste_tarif_boutique():
 
 
 def client_comptoir():
-    """Client generique pour les ventes au detail (comptoir) sans client B2B
-    identifie. Les prix proviennent de la liste de tarifs BOUTIQUE ; cree
-    une seule fois (categorie a l'appui), puis reutilise pour toutes les
-    ventes suivantes."""
+    """Client pour les ventes au detail (comptoir) sans client B2B
+    identifie : pointe uniquement sur le client reel « BOUTIQUE KH YALLA »
+    (seul client/boutique concerne par la vente au detail), dont les prix
+    proviennent de la liste de tarifs BOUTIQUE."""
     from clients.models import CategorieClient, Client
 
+    client = Client.objects.filter(nomclient__iexact="BOUTIQUE KH YALLA").first()
+    if client:
+        return client
+
+    # Filet de securite si ce client venait a disparaitre/etre renomme.
     categorie, _ = CategorieClient.objects.get_or_create(
         nom_categorie="VENTE COMPTOIR",
         defaults={"description": "Categorie technique pour les ventes au detail sans client identifie."},

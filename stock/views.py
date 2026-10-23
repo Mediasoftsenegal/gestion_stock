@@ -639,8 +639,16 @@ def appro_creer(request):
     if request.method == "POST":
         date = request.POST.get("date")
         fournisseur_id = request.POST.get("fournisseur")
+        numero = request.POST.get("numero", "").strip()
         note = request.POST.get("note", "").strip()
         taxes_ids = request.POST.getlist("taxes")
+
+        if not numero:
+            messages.error(request, "Le numéro d'appro est obligatoire.")
+            return redirect("stock:appro_creer")
+        if Approvisionnement.objects.filter(numero=numero).exists():
+            messages.error(request, f"Le numéro d'appro « {numero} » existe déjà.")
+            return redirect("stock:appro_creer")
 
         fournisseur = get_object_or_404(Fournisseur, pk=fournisseur_id)
 
@@ -651,6 +659,7 @@ def appro_creer(request):
             appro = Approvisionnement.objects.create(
                 date=date,
                 fournisseur=fournisseur,
+                numero=numero,
                 note=note,
             )
             if taxes_valides:

@@ -53,7 +53,7 @@ class MouvementStock(TimeStampedModel):
 # --------------------------------------------------------------------------- #
 class Approvisionnement(TimeStampedModel):
     numero = models.CharField(
-        "numéro d'appro", max_length=60, unique=True, null=True, blank=True, editable=False,
+        "numéro d'appro", max_length=60, unique=True, null=True, blank=True,
     )
     reference = models.CharField(max_length=60, unique=True, blank=True)
     date = models.DateField()
@@ -78,12 +78,10 @@ class Approvisionnement(TimeStampedModel):
         return self.reference or f"Appro #{self.pk}"
 
     def save(self, *args, **kwargs):
-        from core.utils import generer_reference
-
         if not self.reference:
+            from core.utils import generer_reference
+
             self.reference = generer_reference("APP", Approvisionnement)
-        if not self.numero:
-            self.numero = generer_reference("N", Approvisionnement, champ="numero")
         super().save(*args, **kwargs)
 
     # ----------------------------------------------------------------- #

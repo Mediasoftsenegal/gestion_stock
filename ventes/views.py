@@ -13,7 +13,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from catalogue.models import Article, Conditionnement, Tarif
+from catalogue.models import Article, Conditionnement, Tarif, get_prix
 from clients.models import Client
 from core.utils import PERIODES, lire_xlsx, reessayer_si_conflit_bd
 
@@ -28,7 +28,13 @@ from .models import (
     LigneFactureRetour,
     Paiement,
 )
-from .services import client_comptoir, conditionnement_unite, releve_annuel_client, suivi_client
+from .services import (
+    client_comptoir,
+    conditionnement_unite,
+    liste_tarif_boutique,
+    releve_annuel_client,
+    suivi_client,
+)
 
 
 def _montant(valeur, defaut=Decimal("0")):
@@ -769,11 +775,19 @@ def ajax_tarifs(request):
 @login_required
 def ajax_recherche_article(request):
     """Recherche un article par code-barre (scan) ou par texte (nom/code),
-    pour la vente au detail."""
+    pour la vente au detail. Prix issu de la liste de tarifs BOUTIQUE ;
+    a defaut (article non repertorie dans cette liste), prix de reference
+    Article.prix_bouteille."""
     from stock.services import stock_unites
 
     code_barre = request.GET.get("code_barre", "").strip()
     q = request.GET.get("q", "").strip()
+    cond_unite = conditionnement_unite()
+    liste_boutique = liste_tarif_boutique()
+
+    def prix_vente(article):
+        prix = get_prix(liste_boutique, article, cond_unite)
+        return prix if prix is not None else article.prix_bouteille
 
     if code_barre:
         article = Article.objects.filter(code_barre=code_barre, actif=True).first()
@@ -787,7 +801,7 @@ def ajax_recherche_article(request):
             "article_id": article.id,
             "libarticle": article.libarticle,
             "code": article.code,
-            "prix_bouteille": float(article.prix_bouteille),
+            "prix_bouteille": float(prix_vente(article)),
             "stock": stock_unites(article),
         })
 
@@ -800,7 +814,7 @@ def ajax_recherche_article(request):
             "resultats": [
                 {
                     "article_id": a.id, "libarticle": a.libarticle, "code": a.code,
-                    "prix_bouteille": float(a.prix_bouteille), "stock": stock_unites(a),
+                    "prix_bouteille": float(prix_vente(a)), "stock": stock_unites(a),
                 }
                 for a in articles
             ]
@@ -874,6 +888,7 @@ def vente_detail_create(request):
             return redirect("ventes:vente_detail_create")
 
         cond_unite = conditionnement_unite()
+        liste_boutique = liste_tarif_boutique()
 
         try:
             with transaction.atomic():
@@ -886,12 +901,13 @@ def vente_detail_create(request):
                 )
                 for a, qv in lignes_valides:
                     article = get_object_or_404(Article, pk=int(a))
+                    prix = get_prix(liste_boutique, article, cond_unite)
                     ligne = LigneCommande(
                         commande=commande,
                         article=article,
                         conditionnement=cond_unite,
                         quantite=int(qv),
-                        prix_unitaire=article.prix_bouteille,
+                        prix_unitaire=prix if prix is not None else article.prix_bouteille,
                     )
                     ligne.save()
                 commande.valider(user=request.user)

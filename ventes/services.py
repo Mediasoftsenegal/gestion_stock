@@ -21,25 +21,32 @@ MOIS_LABELS = [
 ]
 
 
+def liste_tarif_boutique():
+    """Liste de tarifs 'BOUTIQUE', utilisee pour les prix de la vente au
+    detail (comptoir). Cree une liste vide si elle n'existe pas encore."""
+    from clients.models import ListeTarif
+
+    liste_tarif = ListeTarif.objects.filter(nomtarif__iexact="BOUTIQUE").first()
+    if liste_tarif:
+        return liste_tarif
+    return ListeTarif.objects.create(
+        nomtarif="BOUTIQUE",
+        description="Prix de vente au detail (comptoir).",
+    )
+
+
 def client_comptoir():
     """Client generique pour les ventes au detail (comptoir) sans client B2B
-    identifie. Cree une seule fois (categorie + liste de tarifs technique a
-    l'appui), puis reutilise pour toutes les ventes suivantes."""
-    from clients.models import CategorieClient, Client, ListeTarif
+    identifie. Les prix proviennent de la liste de tarifs BOUTIQUE ; cree
+    une seule fois (categorie a l'appui), puis reutilise pour toutes les
+    ventes suivantes."""
+    from clients.models import CategorieClient, Client
 
     categorie, _ = CategorieClient.objects.get_or_create(
         nom_categorie="VENTE COMPTOIR",
         defaults={"description": "Categorie technique pour les ventes au detail sans client identifie."},
     )
-    liste_tarif, _ = ListeTarif.objects.get_or_create(
-        nomtarif="VENTE COMPTOIR",
-        defaults={
-            "description": (
-                "Liste technique : les prix de vente au detail proviennent "
-                "d'Article.prix_bouteille, pas de cette liste."
-            ),
-        },
-    )
+    liste_tarif = liste_tarif_boutique()
     client, _ = Client.objects.get_or_create(
         codeclient="COMPTOIR",
         defaults={
@@ -50,6 +57,9 @@ def client_comptoir():
             "exempttva": True,
         },
     )
+    if client.liste_tarif_id != liste_tarif.id:
+        client.liste_tarif = liste_tarif
+        client.save(update_fields=["liste_tarif", "modifie_le"])
     return client
 
 

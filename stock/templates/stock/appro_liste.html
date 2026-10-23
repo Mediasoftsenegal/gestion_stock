@@ -59,7 +59,7 @@
         {% for ap in page_obj %}
         <tr>
           <td class="fw-semibold">
-            <a href="{% url 'stock:appro_detail' ap.pk %}" class="text-decoration-none">{{ ap.reference }}</a>
+            <a href="{% url 'stock:appro_detail' ap.pk %}" class="text-decoration-none">{{ ap.numero|default:ap.reference }}</a>
           </td>
           <td>{{ ap.date|date:"d/m/Y" }}</td>
           <td>{{ ap.fournisseur.nom_fournisseur|default:"—" }}</td>

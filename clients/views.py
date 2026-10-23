@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,14 +29,17 @@ def client_liste(request):
         clients = clients.filter(categorie_id=categorie)
 
     clients = clients.order_by("nomclient")
+    total = clients.count()
+    page_obj = Paginator(clients, 25).get_page(request.GET.get("page"))
 
     contexte = {
         "actif": "clients",
-        "clients": clients,
+        "clients": page_obj,
+        "page_obj": page_obj,
         "categories": CategorieClient.objects.all(),
         "q": q,
         "categorie_sel": categorie,
-        "total": clients.count(),
+        "total": total,
     }
     return render(request, "clients/liste.html", contexte)
 

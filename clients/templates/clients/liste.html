@@ -50,7 +50,7 @@
         {% for c in clients %}
         <tr>
           <td class="text-muted-2">{{ c.codeclient }}</td>
-          <td><a href="{% url 'clients:detail' c.pk %}" class="fw-semibold text-decoration-none">{{ c.nom }}</a>
+          <td><a href="{% url 'clients:detail' c.pk %}" class="fw-semibold text-decoration-none">{{ c.nom }}</a>{% if c.adresse %}, {{ c.adresse }}{% endif %}
               {% if not c.actif %}<span class="badge-soft badge-danger ms-1">inactif</span>{% endif %}</td>
           <td>{{ c.categorie.nom_categorie }}</td>
           <td>{{ c.liste_tarif.nomtarif }}</td>

@@ -668,7 +668,8 @@ def appro_creer(request):
         messages.success(request, f"Approvisionnement {appro.reference} créé.")
         return redirect("stock:appro_editer", pk=appro.pk)
 
-    return render(request, "stock/appro_creer.html", {})
+    fournisseurs = Fournisseur.objects.order_by("nom_fournisseur")
+    return render(request, "stock/appro_creer.html", {"fournisseurs": fournisseurs})
 
 
 @login_required

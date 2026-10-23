@@ -29,10 +29,13 @@
               <small class="text-muted">Date de l'approvisionnement.</small>
             </div>
             <div class="col-md-6">
-              <label for="fournisseur_search" class="form-label"><span class="text-danger">*</span> Fournisseur</label>
-              <input type="hidden" id="fournisseur" name="fournisseur" value="" required>
-              <input type="text" id="fournisseur_search" class="form-control" placeholder="Nom ou code du fournisseur…" autocomplete="off">
-              <div id="fournisseur_results" class="list-group mt-1" style="max-height:220px;overflow:auto"></div>
+              <label for="fournisseur" class="form-label"><span class="text-danger">*</span> Fournisseur</label>
+              <select id="fournisseur" name="fournisseur" class="form-select" required>
+                <option value="">— Choisir un fournisseur —</option>
+                {% for f in fournisseurs %}
+                <option value="{{ f.id }}">{{ f.nom_fournisseur }}</option>
+                {% endfor %}
+              </select>
               <small class="text-muted">Les taxes proposées dépendent du fournisseur.</small>
             </div>
           </div>
@@ -78,13 +81,9 @@
 
 <script>
 (function () {
-  const rechercheFournisseurUrl = "{% url 'ventes:ajax_recherche_fournisseur' %}";
   const taxesUrlTpl = "{% url 'stock:fournisseur_taxes_json' 0 %}";
   const selFournisseur = document.getElementById("fournisseur");
-  const fournisseurSearch = document.getElementById("fournisseur_search");
-  const fournisseurResults = document.getElementById("fournisseur_results");
   const selTaxes = document.getElementById("taxes");
-  let fournisseurSearchTimer = null;
 
   function resetTaxes(message) {
     selTaxes.innerHTML = "";
@@ -98,58 +97,28 @@
 
   function populateTaxes(taxes) {
     selTaxes.innerHTML = "";
-
     if (!taxes || taxes.length === 0) {
       resetTaxes("Aucune taxe configurée pour ce fournisseur.");
       return;
     }
-
     taxes.forEach(t => {
       const o = document.createElement("option");
       o.value = t.id;
       o.textContent = t.type_taxe + " (" + t.valeur_taxe + "%)";
       selTaxes.appendChild(o);
     });
-
     selTaxes.disabled = false;
     selTaxes.size = Math.max(4, taxes.length);
   }
 
-  function chargerTaxes(fournisseurId) {
-    const url = taxesUrlTpl.replace("/0/", "/" + fournisseurId + "/");
+  selFournisseur.addEventListener("change", function () {
+    const id = selFournisseur.value;
+    if (!id) { resetTaxes("Sélectionnez d'abord un fournisseur…"); return; }
+    const url = taxesUrlTpl.replace("/0/", "/" + id + "/");
     fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } })
       .then(r => r.json())
       .then(data => populateTaxes(data.taxes))
       .catch(() => resetTaxes("Erreur de chargement des taxes."));
-  }
-
-  function selectionnerFournisseur(id, libelle) {
-    selFournisseur.value = id;
-    fournisseurSearch.value = libelle;
-    fournisseurResults.innerHTML = "";
-    chargerTaxes(id);
-  }
-
-  fournisseurSearch.addEventListener("input", function () {
-    clearTimeout(fournisseurSearchTimer);
-    selFournisseur.value = "";
-    const q = fournisseurSearch.value.trim();
-    if (q.length < 2) { fournisseurResults.innerHTML = ""; resetTaxes("Sélectionnez d'abord un fournisseur…"); return; }
-    fournisseurSearchTimer = setTimeout(function () {
-      fetch(rechercheFournisseurUrl + "?q=" + encodeURIComponent(q))
-        .then(r => r.json())
-        .then(data => {
-          fournisseurResults.innerHTML = "";
-          (data.resultats || []).forEach(f => {
-            const item = document.createElement("button");
-            item.type = "button";
-            item.className = "list-group-item list-group-item-action";
-            item.innerHTML = f.nom + (f.code ? ` <span class="text-muted-2 small">(${f.code})</span>` : "");
-            item.addEventListener("click", () => selectionnerFournisseur(f.fournisseur_id, f.nom));
-            fournisseurResults.appendChild(item);
-          });
-        });
-    }, 250);
   });
 })();
 </script>

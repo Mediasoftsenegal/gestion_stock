@@ -13,6 +13,7 @@ urlpatterns = [
     path("commandes/importer/apercu/", views.commande_import_apercu, name="commande_import_apercu"),
     path("commandes/<int:pk>/", views.commande_detail, name="commande_detail"),
     path("commandes/<int:pk>/pdf/", views.commande_pdf, name="commande_pdf"),
+    path("commandes/<int:pk>/modifier/", views.commande_modifier, name="commande_modifier"),
     path("commandes/<int:pk>/valider/", views.commande_valider, name="commande_valider"),
     path("commandes/<int:pk>/generer-facture/", views.commande_generer_facture, name="commande_generer_facture"),
     path("commandes/<int:pk>/supprimer/", views.commande_supprimer, name="commande_supprimer"),

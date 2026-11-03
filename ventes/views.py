@@ -214,76 +214,90 @@ def archive_facture_detail(request, pk):
     return render(request, "ventes/archive_facture_detail.html", {"actif": "archives", "facture": facture})
 
 
+def _enregistrer_commande(request, commande=None):
+    """Cree (commande None) ou remplace les lignes d'une commande a partir du
+    formulaire. Retourne la commande, ou None si une erreur a ete signalee."""
+    client_id = request.POST.get("client")
+    note = request.POST.get("note", "").strip()
+    appliquer_tva = bool(request.POST.get("appliquer_tva"))
+    articles = request.POST.getlist("article")
+    conds = request.POST.getlist("conditionnement")
+    quantites = request.POST.getlist("quantite")
+    remises = request.POST.getlist("remise")
+    prix_saisis = request.POST.getlist("prix")
+    # Aligne les listes optionnelles sur celle des lignes.
+    remises += [""] * (len(articles) - len(remises))
+    prix_saisis += [""] * (len(articles) - len(prix_saisis))
+
+    client = get_object_or_404(Client, pk=client_id) if client_id else None
+    if not client:
+        messages.error(request, "Veuillez sélectionner un client.")
+        return None
+
+    lignes_valides = []
+    for a, c, qv, rm, pu in zip(articles, conds, quantites, remises, prix_saisis):
+        if not (a and c and qv.strip()):
+            continue
+        quantite = _quantite(qv)
+        if quantite is None or quantite <= 0:
+            messages.error(request, f"Quantité invalide : « {qv} ».")
+            return None
+        conditionnement = Conditionnement.objects.filter(pk=int(c)).first()
+        if conditionnement is None:
+            continue
+        bouteilles = quantite * conditionnement.nombre_unites
+        if bouteilles != bouteilles.to_integral_value():
+            messages.error(
+                request,
+                f"Quantité {qv} {conditionnement.nom} ne donne pas un nombre entier de bouteilles.",
+            )
+            return None
+        lignes_valides.append((a, c, quantite, rm, pu))
+    if not lignes_valides:
+        messages.error(request, "Ajoutez au moins une ligne valide.")
+        return None
+
+    try:
+        with transaction.atomic():
+            if commande is None:
+                commande = Commande.objects.create(
+                    client=client, date=timezone.localdate(), note=note,
+                    appliquer_tva=appliquer_tva, cree_par=request.user,
+                )
+            else:
+                commande.client = client
+                commande.note = note
+                commande.appliquer_tva = appliquer_tva
+                commande.save()
+                commande.lignes.all().delete()
+            for a, c, quantite, rm, pu in lignes_valides:
+                ligne = LigneCommande(
+                    commande=commande,
+                    article_id=int(a),
+                    conditionnement_id=int(c),
+                    quantite=quantite,
+                    remise_unitaire=_montant(rm),
+                    # Prix modifiable (negociation) ; vide = prix de la liste
+                    # de tarifs (garde-fou plancher applique dans save()).
+                    prix_unitaire=_montant(pu) if pu.strip() else None,
+                )
+                ligne.save()
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+        return None
+    return commande
+
+
 @login_required
 @reessayer_si_conflit_bd()
 def commande_create(request):
     """Saisie d'une commande : client + lignes (prix issu de la liste de tarifs)."""
     if request.method == "POST":
-        client_id = request.POST.get("client")
-        note = request.POST.get("note", "").strip()
-        appliquer_tva = bool(request.POST.get("appliquer_tva"))
-        articles = request.POST.getlist("article")
-        conds = request.POST.getlist("conditionnement")
-        quantites = request.POST.getlist("quantite")
-        remises = request.POST.getlist("remise")
-        prix_saisis = request.POST.getlist("prix")
-        # Aligne les listes optionnelles sur celle des lignes.
-        remises += [""] * (len(articles) - len(remises))
-        prix_saisis += [""] * (len(articles) - len(prix_saisis))
-
-        client = get_object_or_404(Client, pk=client_id) if client_id else None
-        if not client:
-            messages.error(request, "Veuillez sélectionner un client.")
+        commande = _enregistrer_commande(request)
+        if commande is None:
             return redirect("ventes:commande_create")
-
-        lignes_valides = []
-        for a, c, qv, rm, pu in zip(articles, conds, quantites, remises, prix_saisis):
-            if not (a and c and qv.strip()):
-                continue
-            quantite = _quantite(qv)
-            if quantite is None or quantite <= 0:
-                messages.error(request, f"Quantité invalide : « {qv} ».")
-                return redirect("ventes:commande_create")
-            conditionnement = Conditionnement.objects.filter(pk=int(c)).first()
-            if conditionnement is None:
-                continue
-            bouteilles = quantite * conditionnement.nombre_unites
-            if bouteilles != bouteilles.to_integral_value():
-                messages.error(
-                    request,
-                    f"Quantité {qv} {conditionnement.nom} ne donne pas un nombre entier de bouteilles.",
-                )
-                return redirect("ventes:commande_create")
-            lignes_valides.append((a, c, quantite, rm, pu))
-        if not lignes_valides:
-            messages.error(request, "Ajoutez au moins une ligne valide.")
-            return redirect("ventes:commande_create")
-
-        try:
-            with transaction.atomic():
-                commande = Commande.objects.create(
-                    client=client, date=timezone.localdate(), note=note,
-                    appliquer_tva=appliquer_tva, cree_par=request.user,
-                )
-                for a, c, quantite, rm, pu in lignes_valides:
-                    ligne = LigneCommande(
-                        commande=commande,
-                        article_id=int(a),
-                        conditionnement_id=int(c),
-                        quantite=quantite,
-                        remise_unitaire=_montant(rm),
-                        # Prix modifiable (negociation) ; vide = prix de la liste
-                        # de tarifs (garde-fou plancher applique dans save()).
-                        prix_unitaire=_montant(pu) if pu.strip() else None,
-                    )
-                    ligne.save()
-            messages.success(
-                request, f"Bon de commande {commande.reference} créé."
-            )
-            return redirect("ventes:commande_detail", pk=commande.pk)
-        except ValidationError as e:
-            messages.error(request, "; ".join(e.messages))
-            return redirect("ventes:commande_create")
+        messages.success(request, f"Bon de commande {commande.reference} créé.")
+        return redirect("ventes:commande_detail", pk=commande.pk)
 
     # GET
     client_pre = request.GET.get("client")
@@ -292,6 +306,46 @@ def commande_create(request):
         "actif": "commandes",
         "client_pre": client_pre_obj.pk if client_pre_obj else "",
         "client_pre_obj": client_pre_obj,
+    }
+    return render(request, "ventes/commande_form.html", contexte)
+
+
+@login_required
+@reessayer_si_conflit_bd()
+def commande_modifier(request, pk):
+    """Modification d'un bon de commande non encore valide."""
+    commande = get_object_or_404(
+        Commande.objects.select_related("client").prefetch_related("lignes"), pk=pk
+    )
+    if commande.statut != Commande.Statut.BON_DE_COMMANDE:
+        messages.error(request, "Seul un bon de commande non validé peut être modifié.")
+        return redirect("ventes:commande_detail", pk=commande.pk)
+
+    if request.method == "POST":
+        resultat = _enregistrer_commande(request, commande=commande)
+        if resultat is None:
+            return redirect("ventes:commande_modifier", pk=commande.pk)
+        messages.success(request, f"Bon de commande {commande.reference} modifié.")
+        return redirect("ventes:commande_detail", pk=commande.pk)
+
+    lignes_initiales = [
+        {
+            "article_id": l.article_id,
+            "conditionnement_id": l.conditionnement_id,
+            "quantite": format(l.quantite.normalize(), "f").replace(".", ","),
+            "remise": str(l.remise_unitaire),
+            "prix": str(l.prix_unitaire),
+        }
+        for l in commande.lignes.all()
+    ]
+    contexte = {
+        "actif": "commandes",
+        "client_pre": commande.client_id,
+        "client_pre_obj": commande.client,
+        "commande": commande,
+        "appliquer_tva_initial": commande.appliquer_tva,
+        "note_initiale": commande.note,
+        "lignes_initiales": lignes_initiales,
     }
     return render(request, "ventes/commande_form.html", contexte)
 

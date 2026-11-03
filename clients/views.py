@@ -71,12 +71,15 @@ def liste_tarif_liste(request):
     if q:
         listes = listes.filter(Q(nomtarif__icontains=q) | Q(description__icontains=q))
     listes = listes.order_by("nomtarif")
+    total = listes.count()
+    page_obj = Paginator(listes, 35).get_page(request.GET.get("page"))
 
     contexte = {
         "actif": "tarifs",
-        "listes": listes,
+        "listes": page_obj,
+        "page_obj": page_obj,
         "q": q,
-        "total": listes.count(),
+        "total": total,
         "peut_gerer": request.user.has_perm("clients.add_listetarif"),
     }
     return render(request, "clients/tarif_liste.html", contexte)

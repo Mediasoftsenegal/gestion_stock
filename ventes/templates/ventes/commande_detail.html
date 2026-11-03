@@ -124,6 +124,44 @@
           </tbody>
         </table>
       </div>
+      {% if commande.statut == 'BON_DE_COMMANDE' %}
+      <div class="card-body border-top">
+        <form method="post" action="{% url 'ventes:commande_ligne_ajouter' commande.pk %}" class="row g-2 align-items-end">{% csrf_token %}
+          <div class="col-md-4">
+            <label class="form-label small">Ajouter un article</label>
+            <select name="article_id" class="form-select form-select-sm" required>
+              <option value="">— Article —</option>
+              {% for a in articles_commande %}
+                <option value="{{ a.id }}">{{ a.libarticle }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Conditionnement</label>
+            <select name="conditionnement_id" class="form-select form-select-sm" required>
+              {% for c in conditionnements_ligne %}
+                <option value="{{ c.id }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-1">
+            <label class="form-label small">Quantité</label>
+            <input type="text" name="quantite" value="1" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Prix (vide = tarif)</label>
+            <input type="number" step="1" min="0" name="prix_unitaire" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label small">Remise</label>
+            <input type="number" step="1" min="0" name="remise_unitaire" value="0" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-2">
+            <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-plus-lg"></i> Ajouter</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
       <div class="card-body border-top small">
         <div class="d-flex justify-content-between text-muted-2">
           <span>Décompte par conditionnement</span>

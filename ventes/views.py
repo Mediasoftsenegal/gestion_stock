@@ -470,6 +470,10 @@ def commande_detail(request, pk):
         "facture": facture,
         "peut_valider": request.user.has_perm("ventes.peut_valider_commande"),
         "conditionnements_ligne": Conditionnement.objects.order_by("nombre_unites", "nom"),
+        "articles_commande": (
+            Article.objects.filter(actif=True, tarifs__liste_tarif=commande.liste_tarif).distinct().order_by("libarticle")
+            if commande.liste_tarif_id else Article.objects.none()
+        ),
     }
     return render(request, "ventes/commande_detail.html", contexte)
 
@@ -505,6 +509,44 @@ def commande_generer_facture(request, pk):
     except ValidationError as e:
         messages.error(request, "; ".join(e.messages))
         return redirect("ventes:commande_detail", pk=pk)
+
+
+@login_required
+@require_POST
+@reessayer_si_conflit_bd()
+def commande_ligne_ajouter(request, pk):
+    """Ajout d'une ligne a un bon de commande non encore valide."""
+    commande = get_object_or_404(Commande, pk=pk)
+    if commande.statut != Commande.Statut.BON_DE_COMMANDE:
+        messages.error(request, "Seul un bon de commande non validé peut être modifié.")
+        return redirect("ventes:commande_detail", pk=pk)
+
+    article = get_object_or_404(Article, pk=request.POST.get("article_id"), actif=True)
+    conditionnement = get_object_or_404(Conditionnement, pk=request.POST.get("conditionnement_id"))
+    quantite = _quantite(request.POST.get("quantite"))
+    if quantite is None or quantite <= 0:
+        messages.error(request, "La quantité doit être supérieure à 0.")
+        return redirect("ventes:commande_detail", pk=pk)
+    if (quantite * conditionnement.nombre_unites) != (quantite * conditionnement.nombre_unites).to_integral_value():
+        messages.error(request, f"Quantité {quantite} {conditionnement.nom} ne donne pas un nombre entier de bouteilles.")
+        return redirect("ventes:commande_detail", pk=pk)
+
+    prix = request.POST.get("prix_unitaire", "").strip()
+    ligne = LigneCommande(
+        commande=commande,
+        article=article,
+        conditionnement=conditionnement,
+        quantite=quantite,
+        prix_unitaire=_montant(prix) if prix else None,
+        remise_unitaire=_montant(request.POST.get("remise_unitaire")),
+    )
+    try:
+        ligne.save()
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+    else:
+        messages.success(request, f"Ligne {article.libarticle} ajoutée.")
+    return redirect("ventes:commande_detail", pk=pk)
 
 
 @login_required

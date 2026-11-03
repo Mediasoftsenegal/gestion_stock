@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{% if commande %}Modifier {{ commande.reference }}{% else %}Nouvelle commande{% endif %}{% endblock %}
-{% block page_title %}{% if commande %}Modifier {{ commande.reference }}{% else %}Nouvelle commande{% endif %}{% endblock %}
+{% block title %}Nouvelle commande{% endblock %}
+{% block page_title %}Nouvelle commande{% endblock %}
 {% block topbar_actions %}<a href="{% url 'ventes:commande_liste' %}" class="btn btn-sm btn-outline-secondary">← Annuler</a>{% endblock %}
 
 {% block content %}
@@ -23,7 +23,7 @@
         </div>
 
         <label class="form-label mt-3">Note (optionnel)</label>
-        <textarea name="note" class="form-control" rows="3" placeholder="Remarque…">{{ note_initiale }}</textarea>
+        <textarea name="note" class="form-control" rows="3" placeholder="Remarque…"></textarea>
       </div>
       <div class="card-body border-top">
         <div class="small text-muted-2 mb-2" id="decompteConditionnements"></div>
@@ -152,10 +152,6 @@ const btnSave = document.getElementById('btnSave');
 const body = document.getElementById('lignesBody');
 const emptyRow = document.getElementById('emptyRow');
 
-{{ lignes_initiales|json_script:"lignes-initiales" }}
-let LIGNES_A_RESTAURER = JSON.parse(document.getElementById('lignes-initiales').textContent) || [];
-const TVA_INITIALE = {% if commande %}{{ appliquer_tva_initial|yesno:'true,false' }}{% else %}null{% endif %};
-
 async function loadTarifs(clientId){
   ARTICLES = [];
   body.querySelectorAll('.ligne').forEach(r => r.remove());
@@ -164,32 +160,14 @@ async function loadTarifs(clientId){
   const data = await r.json();
   ARTICLES = data.articles;
   // Suggestion par defaut d'apres le client ; reste modifiable par l'utilisateur.
-  appliquerTvaCheckbox.checked = TVA_INITIALE !== null ? TVA_INITIALE : (!!data.avectva && !data.exempttva);
+  appliquerTvaCheckbox.checked = !!data.avectva && !data.exempttva;
   document.getElementById('listeInfo').textContent = "Liste de tarifs : " + data.liste_tarif;
   btnAdd.disabled = ARTICLES.length === 0;
   btnSave.disabled = true;
   if(ARTICLES.length === 0){
     document.getElementById('listeInfo').textContent += " — aucun tarif défini pour ce client.";
   }
-  if(LIGNES_A_RESTAURER.length){
-    const lignes = LIGNES_A_RESTAURER;
-    LIGNES_A_RESTAURER = [];
-    lignes.forEach(l => restaurerLigne(l));
-  }
   recalc();
-}
-
-function restaurerLigne(l){
-  addRow();
-  const tr = body.lastElementChild;
-  tr.querySelector('.sel-article').value = l.article_id;
-  onArticle(tr);
-  tr.querySelector('.sel-cond').value = l.conditionnement_id;
-  onConditionnement(tr);
-  tr.querySelector('.in-prix').value = l.prix;
-  tr.querySelector('.in-qte').value = l.quantite.replace(',', '.');
-  tr.querySelector('.in-remise').value = l.remise;
-  recalcRow(tr);
 }
 
 function addRow(){

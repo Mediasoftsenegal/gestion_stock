@@ -455,6 +455,22 @@ def facture_import_apercu(request):
     })
 
 
+def _tarifs_par_article(liste_tarif_id):
+    """Prix de la liste de tarifs, par article, pour pre-remplir l'ajout de ligne.
+    Le conditionnement par defaut est le plus petit tarifé (unite de base)."""
+    tarifs = {}
+    if not liste_tarif_id:
+        return tarifs
+    qs = Tarif.objects.filter(liste_tarif_id=liste_tarif_id).select_related("conditionnement")
+    for t in qs.order_by("conditionnement__nombre_unites", "conditionnement__nom"):
+        tarifs.setdefault(str(t.article_id), []).append({
+            "conditionnement_id": t.conditionnement_id,
+            "nom": str(t.conditionnement),
+            "prix": str(t.prix_unitaire),
+        })
+    return tarifs
+
+
 @login_required
 def commande_detail(request, pk):
     commande = get_object_or_404(
@@ -470,6 +486,7 @@ def commande_detail(request, pk):
         "facture": facture,
         "peut_valider": request.user.has_perm("ventes.peut_valider_commande"),
         "conditionnements_ligne": Conditionnement.objects.order_by("nombre_unites", "nom"),
+        "tarifs_article": _tarifs_par_article(commande.liste_tarif_id),
         "articles_commande": (
             Article.objects.filter(actif=True, tarifs__liste_tarif=commande.liste_tarif).distinct().order_by("libarticle")
             if commande.liste_tarif_id else Article.objects.none()

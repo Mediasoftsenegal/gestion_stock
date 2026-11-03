@@ -139,7 +139,7 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">Conditionnement</label>
-            <select name="conditionnement_id" class="form-select form-select-sm" required>
+            <select name="conditionnement_id" id="ajout_cond_select" class="form-select form-select-sm" required>
               {% for c in conditionnements_ligne %}
                 <option value="{{ c.id }}">{{ c }}</option>
               {% endfor %}
@@ -151,7 +151,7 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">Prix (vide = tarif)</label>
-            <input type="number" step="1" min="0" name="prix_unitaire" class="form-control form-control-sm">
+            <input type="number" step="1" min="0" name="prix_unitaire" id="ajout_prix_input" class="form-control form-control-sm">
           </div>
           <div class="col-md-1">
             <label class="form-label small">Remise</label>
@@ -200,8 +200,39 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ tarifs_article|json_script:"tarifs-article" }}
 <script>
 (function () {
+  const tarifsArticle = JSON.parse(document.getElementById('tarifs-article').textContent) || {};
+  const condSelect = document.getElementById('ajout_cond_select');
+  const prixInput = document.getElementById('ajout_prix_input');
+  const condOriginal = condSelect ? condSelect.innerHTML : '';
+  const articleSelect = document.getElementById('ajout_article_select');
+  if (articleSelect && condSelect && prixInput) {
+    articleSelect.addEventListener('change', function () {
+      const tarifs = tarifsArticle[articleSelect.value];
+      if (!tarifs || tarifs.length === 0) {
+        condSelect.innerHTML = condOriginal;
+        prixInput.value = '';
+        return;
+      }
+      condSelect.innerHTML = '';
+      tarifs.forEach(function (t) {
+        const opt = document.createElement('option');
+        opt.value = t.conditionnement_id;
+        opt.textContent = t.nom;
+        condSelect.appendChild(opt);
+      });
+      condSelect.value = tarifs[0].conditionnement_id;
+      prixInput.value = Math.round(parseFloat(tarifs[0].prix));
+    });
+    condSelect.addEventListener('change', function () {
+      const tarifs = tarifsArticle[articleSelect.value] || [];
+      const t = tarifs.find(function (x) { return String(x.conditionnement_id) === condSelect.value; });
+      if (t) prixInput.value = Math.round(parseFloat(t.prix));
+    });
+  }
+
   const recherche = document.getElementById('ajout_article_search');
   const select = document.getElementById('ajout_article_select');
   if (recherche && select) {

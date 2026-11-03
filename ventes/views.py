@@ -656,7 +656,13 @@ def facture_pdf(request, pk):
 
     html = render_to_string(
         "ventes/facture_pdf.html",
-        {"facture": facture, "now": timezone.now(), "parametrage": Parametrage.get_solo()},
+        {
+            "facture": facture,
+            "now": timezone.now(),
+            "parametrage": Parametrage.get_solo(),
+            "avec_remise": bool(facture.montant_remise),
+            "cs_libelle": 6 if facture.montant_remise else 4,
+        },
         request=request,
     )
     try:

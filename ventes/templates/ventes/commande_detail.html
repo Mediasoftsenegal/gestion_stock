@@ -74,11 +74,11 @@
       <div class="card-header">Lignes</div>
       <div class="table-responsive">
         <table class="table mb-0">
-          <thead><tr><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th>
+          <thead><tr><th class="num">N°</th><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th>
             <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
           <tbody>
             {% for l in commande.lignes.all %}
-            <tr><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+            <tr><td class="num text-muted-2">{{ forloop.counter }}</td><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
               <td class="num">{{ l.quantite_affichee }}</td><td class="num">{{ l.quantite_unites|floatformat:"0" }}</td>
               <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
               <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
@@ -96,9 +96,6 @@
               {{ d.conditionnement.nom }} : <strong>{{ d.quantite }}</strong>{% if not forloop.last %} &nbsp;·&nbsp; {% endif %}
             {% empty %}—{% endfor %}
           </span>
-        </div>
-        <div class="d-flex justify-content-between text-muted-2">
-          <span>Nombre de bouteilles</span><span>{{ commande.nombre_bouteilles }}</span>
         </div>
         <div class="d-flex justify-content-between text-muted-2">
           <span>Montant brut (avant remise)</span><span>{{ commande.montant_brut|format_money_with_currency }}</span>

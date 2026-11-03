@@ -101,34 +101,50 @@
   </div>
 
   <table>
+    {% if avec_remise %}
     <colgroup>
       <col style="width:26%"><col style="width:10%"><col style="width:8%">
       <col style="width:15%"><col style="width:15%"><col style="width:13%"><col style="width:13%">
     </colgroup>
     <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th>
       <th class="num">P.U.</th><th class="num">Rem. unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
+    {% else %}
+    <colgroup>
+      <col style="width:40%"><col style="width:14%"><col style="width:12%">
+      <col style="width:16%"><col style="width:18%">
+    </colgroup>
+    <thead><tr><th>Article</th><th>Cond.</th><th class="num">Qté</th>
+      <th class="num">P.U.</th><th class="num">Montant</th></tr></thead>
+    {% endif %}
     <tbody>
       {% for l in facture.lignes.all %}
+      {% if avec_remise %}
       <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
         <td class="num">{{ l.quantite }}</td>
         <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
         <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
         <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>
         <td class="num">{{ l.montant|format_money_with_currency }}</td></tr>
+      {% else %}
+      <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
+        <td class="num">{{ l.quantite }}</td>
+        <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
+        <td class="num">{{ l.montant|format_money_with_currency }}</td></tr>
+      {% endif %}
       {% endfor %}
     </tbody>
     <tfoot>
-      <tr><td colspan="6" class="num">Montant brut</td><td class="num">{{ facture.montant_brut|format_money_with_currency }}</td></tr>
-      {% if facture.montant_remise %}
-      <tr class="remise"><td colspan="6" class="num">Total remises</td><td class="num">- {{ facture.montant_remise|format_money_with_currency }}</td></tr>
+      <tr><td colspan="{{ cs_libelle }}" class="num">Montant brut</td><td class="num">{{ facture.montant_brut|format_money_with_currency }}</td></tr>
+      {% if avec_remise %}
+      <tr class="remise"><td colspan="{{ cs_libelle }}" class="num">Total remises</td><td class="num">- {{ facture.montant_remise|format_money_with_currency }}</td></tr>
       {% endif %}
       {% if facture.retour_valide %}
-      <tr><td colspan="6" class="num">Montant HT facturé</td><td class="num">{{ facture.montant_ht_facture|format_money_with_currency }}</td></tr>
-      <tr class="remise"><td colspan="6" class="num">Retour dépôt-vente {{ facture.retour.numero }}</td><td class="num">- {{ facture.montant_retour_ht|format_money_with_currency }}</td></tr>
+      <tr><td colspan="{{ cs_libelle }}" class="num">Montant HT facturé</td><td class="num">{{ facture.montant_ht_facture|format_money_with_currency }}</td></tr>
+      <tr class="remise"><td colspan="{{ cs_libelle }}" class="num">Retour dépôt-vente {{ facture.retour.numero }}</td><td class="num">- {{ facture.montant_retour_ht|format_money_with_currency }}</td></tr>
       {% endif %}
-      <tr><td colspan="6" class="num">Montant HT{% if facture.retour_valide %} dû{% endif %}</td><td class="num">{{ facture.montant_ht|format_money_with_currency }}</td></tr>
+      <tr><td colspan="{{ cs_libelle }}" class="num">Montant HT{% if facture.retour_valide %} dû{% endif %}</td><td class="num">{{ facture.montant_ht|format_money_with_currency }}</td></tr>
       {% if facture.appliquer_tva %}
-      <tr><td colspan="6" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|format_money_with_currency }}</td></tr>
+      <tr><td colspan="{{ cs_libelle }}" class="num">TVA (18%)</td><td class="num">{{ facture.montant_tva|format_money_with_currency }}</td></tr>
       {% endif %}
     </tfoot>
   </table>

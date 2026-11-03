@@ -95,7 +95,7 @@
       </select>
       <input type="hidden" name="article" class="in-article">
     </td>
-    <td><input type="number" min="1" value="1" class="form-control form-control-sm num in-qte" name="quantite"></td>
+    <td><input type="number" min="0" step="0.001" value="1" class="form-control form-control-sm num in-qte" name="quantite" title="Décimal accepté : 0,5 = demi-casier, 1,5 = un casier et demi"></td>
     <td><input type="number" min="0" step="1" value="0" class="form-control form-control-sm num in-prix" name="prix"
                title="Prix modifiable, jamais en dessous du prix de la liste de tarifs"></td>
     <td><input type="number" min="0" step="1" value="0" class="form-control form-control-sm num in-remise" name="remise"
@@ -140,7 +140,7 @@ clientSearchInput.addEventListener('input', () => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'list-group-item list-group-item-action';
-      item.innerHTML = `${c.nom} <span class="text-muted-2 small">(${c.code})${c.liste_tarif ? ' — ' + c.liste_tarif : ''}</span>`;
+      item.innerHTML = `${c.nom} <span class="text-muted-2 small">(${c.code})${c.categorie ? ' — ' + c.categorie : ''}${c.adresse ? ' — ' + c.adresse : ''}</span>`;
       item.addEventListener('click', () => selectionnerClient(c.client_id, `${c.nom} (${c.code})`));
       clientSearchResults.appendChild(item);
     });
@@ -230,7 +230,7 @@ function onPrixChange(tr){
 
 function recalcRow(tr){
   const prix = parseFloat(tr.querySelector('.in-prix').value || '0');
-  const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+  const qte = (parseFloat(tr.querySelector('.in-qte').value) || 0);
   const inRemise = tr.querySelector('.in-remise');
   let remise = parseFloat(inRemise.value || '0');
   if(isNaN(remise) || remise < 0){ remise = 0; inRemise.value = 0; }
@@ -249,7 +249,7 @@ function recalc(){
     const opt = tr.querySelector('.sel-cond').selectedOptions[0];
     const prix = parseFloat(tr.querySelector('.in-prix').value || '0');
     const unites = opt && opt.dataset.unites ? parseInt(opt.dataset.unites, 10) : 0;
-    const qte = parseInt(tr.querySelector('.in-qte').value || '0', 10);
+    const qte = (parseFloat(tr.querySelector('.in-qte').value) || 0);
     let remise = parseFloat(tr.querySelector('.in-remise').value || '0');
     if(isNaN(remise) || remise < 0) remise = 0;
     if(prix > 0 && remise > prix) remise = prix;

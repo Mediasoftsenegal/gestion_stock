@@ -109,7 +109,7 @@
     <tbody>
       {% for l in commande.lignes.all %}
       <tr><td>{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
-        <td class="num">{{ l.quantite }}</td>
+        <td class="num">{{ l.quantite_affichee }}</td>
         <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
         <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
         <td class="num remise">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>

@@ -37,6 +37,16 @@ from .services import (
 )
 
 
+def _quantite(valeur):
+    """Quantite saisie en conditionnements, entiere ou decimale (0,5 ; 1.5)."""
+    texte = str(valeur or "").strip().replace(",", ".")
+    try:
+        quantite = Decimal(texte)
+    except (InvalidOperation, ValueError):
+        return None
+    return quantite.quantize(Decimal("0.001")) if quantite.is_finite() else None
+
+
 def _montant(valeur, defaut=Decimal("0")):
     """Convertit une saisie utilisateur ('1 500', '1500,50') en Decimal."""
     if valeur in (None, ""):
@@ -226,11 +236,25 @@ def commande_create(request):
             messages.error(request, "Veuillez sélectionner un client.")
             return redirect("ventes:commande_create")
 
-        lignes_valides = [
-            (a, c, qv, rm, pu)
-            for a, c, qv, rm, pu in zip(articles, conds, quantites, remises, prix_saisis)
-            if a and c and qv and qv.isdigit() and int(qv) > 0
-        ]
+        lignes_valides = []
+        for a, c, qv, rm, pu in zip(articles, conds, quantites, remises, prix_saisis):
+            if not (a and c and qv.strip()):
+                continue
+            quantite = _quantite(qv)
+            if quantite is None or quantite <= 0:
+                messages.error(request, f"Quantité invalide : « {qv} ».")
+                return redirect("ventes:commande_create")
+            conditionnement = Conditionnement.objects.filter(pk=int(c)).first()
+            if conditionnement is None:
+                continue
+            bouteilles = quantite * conditionnement.nombre_unites
+            if bouteilles != bouteilles.to_integral_value():
+                messages.error(
+                    request,
+                    f"Quantité {qv} {conditionnement.nom} ne donne pas un nombre entier de bouteilles.",
+                )
+                return redirect("ventes:commande_create")
+            lignes_valides.append((a, c, quantite, rm, pu))
         if not lignes_valides:
             messages.error(request, "Ajoutez au moins une ligne valide.")
             return redirect("ventes:commande_create")
@@ -241,12 +265,12 @@ def commande_create(request):
                     client=client, date=timezone.localdate(), note=note,
                     appliquer_tva=appliquer_tva, cree_par=request.user,
                 )
-                for a, c, qv, rm, pu in lignes_valides:
+                for a, c, quantite, rm, pu in lignes_valides:
                     ligne = LigneCommande(
                         commande=commande,
                         article_id=int(a),
                         conditionnement_id=int(c),
-                        quantite=int(qv),
+                        quantite=quantite,
                         remise_unitaire=_montant(rm),
                         # Prix modifiable (negociation) ; vide = prix de la liste
                         # de tarifs (garde-fou plancher applique dans save()).
@@ -839,11 +863,13 @@ def ajax_recherche_client(request):
     clients = Client.objects.filter(
         Q(nomclient__icontains=q) | Q(codeclient__icontains=q),
         actif=True,
-    ).select_related("liste_tarif").order_by("nomclient")[:15]
+    ).select_related("liste_tarif", "categorie").order_by("nomclient")[:15]
     return JsonResponse({
         "resultats": [
             {
                 "client_id": c.id, "nom": c.nom, "code": c.codeclient,
+                "categorie": c.categorie.nom_categorie if c.categorie else "",
+                "adresse": c.adresse,
                 "liste_tarif": c.liste_tarif.nomtarif if c.liste_tarif else "",
             }
             for c in clients

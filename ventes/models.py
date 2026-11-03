@@ -275,6 +275,11 @@ class LigneCommande(models.Model):
         return self.quantite * self.conditionnement.nombre_unites
 
     @property
+    def quantite_affichee(self):
+        """Quantite sans zeros inutiles, decimale a la francaise (1,5 ; 0,5 ; 2)."""
+        return format(self.quantite.normalize(), "f").replace(".", ",")
+
+    @property
     def montant_brut(self):
         """Montant avant remise."""
         return self.quantite * self.prix_unitaire

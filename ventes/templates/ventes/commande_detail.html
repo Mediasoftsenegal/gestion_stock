@@ -75,7 +75,8 @@
       <div class="table-responsive">
         <table class="table mb-0">
           <thead><tr><th class="num">N°</th><th>Article</th><th>Conditionnement</th><th class="num">Qté</th><th class="num">Bouteilles</th>
-            <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">Remise</th><th class="num">Montant</th></tr></thead>
+            <th class="num">P.U.</th><th class="num">Remise unit.</th><th class="num">Remise</th><th class="num">Montant</th>
+            {% if commande.statut == 'BON_DE_COMMANDE' %}<th></th>{% endif %}</tr></thead>
           <tbody>
             {% for l in commande.lignes.all %}
             <tr><td class="num text-muted-2">{{ forloop.counter }}</td><td class="fw-semibold">{{ l.article.libarticle }}</td><td>{{ l.conditionnement.nom }}</td>
@@ -83,7 +84,42 @@
               <td class="num">{{ l.prix_unitaire|format_money_with_currency }}</td>
               <td class="num">{{ l.remise_unitaire|format_money_with_currency }}</td>
               <td class="num" style="color:var(--terracotta)">{% if l.montant_remise %}- {{ l.montant_remise|format_money_with_currency }}{% else %}—{% endif %}</td>
-              <td class="num fw-semibold">{{ l.montant|format_money_with_currency }}</td></tr>
+              <td class="num fw-semibold">{{ l.montant|format_money_with_currency }}</td>
+              {% if commande.statut == 'BON_DE_COMMANDE' %}
+              <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary btn-edit-ligne" data-target="edit-{{ l.id }}" title="Modifier cette ligne"><i class="bi bi-pencil"></i></button></td>
+              {% endif %}</tr>
+            {% if commande.statut == 'BON_DE_COMMANDE' %}
+            <tr id="edit-{{ l.id }}" class="table-light" style="display:none;">
+              <td colspan="10">
+                <form method="post" action="{% url 'ventes:commande_ligne_modifier' commande.pk l.pk %}" class="row g-2 align-items-end p-2">{% csrf_token %}
+                  <div class="col-md-3">
+                    <label class="form-label small">Conditionnement</label>
+                    <select name="conditionnement_id" class="form-select form-select-sm" required>
+                      {% for c in conditionnements_ligne %}
+                        <option value="{{ c.id }}" {% if c.id == l.conditionnement_id %}selected{% endif %}>{{ c }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small">Quantité (ex. 1,5)</label>
+                    <input type="text" name="quantite" value="{{ l.quantite_affichee }}" class="form-control form-control-sm" required>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small">Prix unitaire</label>
+                    <input type="number" step="1" min="0" name="prix_unitaire" value="{{ l.prix_unitaire|floatformat:0 }}" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small">Remise unitaire</label>
+                    <input type="number" step="1" min="0" name="remise_unitaire" value="{{ l.remise_unitaire|floatformat:0 }}" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save"></i> Enregistrer</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-cancel-ligne" data-target="edit-{{ l.id }}">Annuler</button>
+                  </div>
+                </form>
+              </td>
+            </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -122,4 +158,21 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.btn-edit-ligne').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var row = document.getElementById(btn.getAttribute('data-target'));
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+  });
+});
+document.querySelectorAll('.btn-cancel-ligne').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var row = document.getElementById(btn.getAttribute('data-target'));
+    if (row) row.style.display = 'none';
+  });
+});
+</script>
 {% endblock %}

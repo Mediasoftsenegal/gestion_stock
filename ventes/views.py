@@ -469,6 +469,7 @@ def commande_detail(request, pk):
         "commande": commande,
         "facture": facture,
         "peut_valider": request.user.has_perm("ventes.peut_valider_commande"),
+        "conditionnements_ligne": Conditionnement.objects.order_by("nombre_unites", "nom"),
     }
     return render(request, "ventes/commande_detail.html", contexte)
 
@@ -504,6 +505,40 @@ def commande_generer_facture(request, pk):
     except ValidationError as e:
         messages.error(request, "; ".join(e.messages))
         return redirect("ventes:commande_detail", pk=pk)
+
+
+@login_required
+@require_POST
+@reessayer_si_conflit_bd()
+def commande_ligne_modifier(request, pk, ligne_pk):
+    """Modification d'une ligne d'un bon de commande non encore valide."""
+    commande = get_object_or_404(Commande, pk=pk)
+    if commande.statut != Commande.Statut.BON_DE_COMMANDE:
+        messages.error(request, "Seul un bon de commande non validé peut être modifié.")
+        return redirect("ventes:commande_detail", pk=pk)
+    ligne = get_object_or_404(LigneCommande, pk=ligne_pk, commande=commande)
+
+    conditionnement = get_object_or_404(Conditionnement, pk=request.POST.get("conditionnement_id"))
+    quantite = _quantite(request.POST.get("quantite"))
+    if quantite is None or quantite <= 0:
+        messages.error(request, "La quantité doit être supérieure à 0.")
+        return redirect("ventes:commande_detail", pk=pk)
+    if (quantite * conditionnement.nombre_unites) != (quantite * conditionnement.nombre_unites).to_integral_value():
+        messages.error(request, f"Quantité {quantite} {conditionnement.nom} ne donne pas un nombre entier de bouteilles.")
+        return redirect("ventes:commande_detail", pk=pk)
+
+    prix = request.POST.get("prix_unitaire", "").strip()
+    ligne.conditionnement = conditionnement
+    ligne.quantite = quantite
+    ligne.prix_unitaire = _montant(prix) if prix else None
+    ligne.remise_unitaire = _montant(request.POST.get("remise_unitaire"))
+    try:
+        ligne.save()
+    except ValidationError as e:
+        messages.error(request, "; ".join(e.messages))
+    else:
+        messages.success(request, f"Ligne {ligne.article.libarticle} modifiée.")
+    return redirect("ventes:commande_detail", pk=pk)
 
 
 @login_required

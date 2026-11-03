@@ -191,11 +191,53 @@
               <td class="num">{% if l.prix_achat %}{{ l.prix_achat|format_money_with_currency }}{% else %}&mdash;{% endif %}</td>
               <td class="num">{{ l.remise|floatformat:0 }}%</td>
               <td class="num">{{ l.montant_ht|format_money_with_currency }}</td>
-              <td class="text-end">
-                <form method="post" onsubmit="return confirm('Supprimer cette ligne ?');">{% csrf_token %}
+              <td class="text-end text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-primary btn-edit-ligne" data-target="edit-{{ l.id }}" title="Modifier"><i class="bi bi-pencil"></i></button>
+                <form method="post" class="d-inline" onsubmit="return confirm('Supprimer cette ligne ?');">{% csrf_token %}
                   <input type="hidden" name="action" value="delete_ligne">
                   <input type="hidden" name="ligne_id" value="{{ l.id }}">
                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+            <tr id="edit-{{ l.id }}" class="table-light" style="display:none;">
+              <td colspan="9">
+                <form method="post" class="row g-2 align-items-end p-2">{% csrf_token %}
+                  <input type="hidden" name="action" value="update_ligne">
+                  <input type="hidden" name="ligne_id" value="{{ l.id }}">
+                  <div class="col-md-3">
+                    <label class="form-label small">Article</label>
+                    <select name="article_id" class="form-select form-select-sm" required>
+                      {% for a in articles %}
+                        <option value="{{ a.id }}" {% if a.id == l.article_id %}selected{% endif %}>{{ a.libarticle }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small">Conditionnement</label>
+                    <select name="conditionnement_id" class="form-select form-select-sm">
+                      <option value="">Unité (1)</option>
+                      {% for c in conditionnements %}
+                        <option value="{{ c.id }}" {% if c.id == l.conditionnement_id %}selected{% endif %}>{{ c }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-1">
+                    <label class="form-label small">Quantité</label>
+                    <input type="number" name="quantite" min="1" value="{{ l.quantite }}" class="form-control form-control-sm" required>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small">Prix d'achat</label>
+                    <input type="number" step="0.01" name="prix_achat" value="{{ l.prix_achat|default_if_none:'' }}" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-1">
+                    <label class="form-label small">Remise (%)</label>
+                    <input type="number" step="1" min="0" max="100" name="remise" value="{{ l.remise|floatformat:0 }}" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save"></i> Enregistrer</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-cancel-ligne" data-target="edit-{{ l.id }}">Annuler</button>
+                  </div>
                 </form>
               </td>
             </tr>
@@ -389,6 +431,19 @@
   }
 
   if (taxesSelect) taxesSelect.addEventListener("change", recalcul);
+
+  document.querySelectorAll(".btn-edit-ligne").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var row = document.getElementById(btn.getAttribute("data-target"));
+      if (row) row.style.display = row.style.display === "none" ? "" : "none";
+    });
+  });
+  document.querySelectorAll(".btn-cancel-ligne").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var row = document.getElementById(btn.getAttribute("data-target"));
+      if (row) row.style.display = "none";
+    });
+  });
   filtrerArticles();
   recalcul();
 })();

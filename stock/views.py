@@ -733,6 +733,35 @@ def appro_editer(request, pk):
             else:
                 messages.error(request, "Article et quantité sont obligatoires.")
 
+        elif action == "update_ligne":
+            ligne = get_object_or_404(
+                LigneApprovisionnement, pk=request.POST.get("ligne_id"), approvisionnement=appro
+            )
+            article = get_object_or_404(
+                Article, pk=request.POST.get("article_id"), actif=True, fournisseur=appro.fournisseur
+            )
+            conditionnement_id = request.POST.get("conditionnement_id")
+            conditionnement = (
+                get_object_or_404(Conditionnement, pk=conditionnement_id) if conditionnement_id else None
+            )
+            try:
+                quantite = int(request.POST.get("quantite", ""))
+                if quantite < 1:
+                    raise ValueError
+            except ValueError:
+                messages.error(request, "La quantité doit être un entier supérieur ou égal à 1.")
+                return redirect("stock:appro_editer", pk=appro.pk)
+            prix_achat = request.POST.get("prix_achat") or None
+            remise = Decimal(str(request.POST.get("remise") or 0))
+
+            ligne.article = article
+            ligne.conditionnement = conditionnement
+            ligne.quantite = quantite
+            ligne.prix_achat = prix_achat
+            ligne.remise = remise
+            ligne.save()
+            messages.success(request, f"{article.libarticle} modifié.")
+
         elif action == "delete_ligne":
             ligne_id = request.POST.get("ligne_id")
             ligne = get_object_or_404(LigneApprovisionnement, pk=ligne_id, approvisionnement=appro)

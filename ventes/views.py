@@ -531,6 +531,22 @@ def commande_generer_facture(request, pk):
 @login_required
 @require_POST
 @reessayer_si_conflit_bd()
+def commande_ligne_supprimer(request, pk, ligne_pk):
+    """Suppression d'une ligne d'un bon de commande non encore valide."""
+    commande = get_object_or_404(Commande, pk=pk)
+    if commande.statut != Commande.Statut.BON_DE_COMMANDE:
+        messages.error(request, "Seul un bon de commande non validé peut être modifié.")
+        return redirect("ventes:commande_detail", pk=pk)
+    ligne = get_object_or_404(LigneCommande, pk=ligne_pk, commande=commande)
+    libelle = ligne.article.libarticle
+    ligne.delete()
+    messages.success(request, f"Ligne {libelle} supprimée.")
+    return redirect("ventes:commande_detail", pk=pk)
+
+
+@login_required
+@require_POST
+@reessayer_si_conflit_bd()
 def commande_ligne_ajouter(request, pk):
     """Ajout d'une ligne a un bon de commande non encore valide."""
     commande = get_object_or_404(Commande, pk=pk)

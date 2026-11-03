@@ -17,6 +17,7 @@ urlpatterns = [
     path("commandes/<int:pk>/generer-facture/", views.commande_generer_facture, name="commande_generer_facture"),
     path("commandes/<int:pk>/supprimer/", views.commande_supprimer, name="commande_supprimer"),
     path("commandes/<int:pk>/lignes/ajouter/", views.commande_ligne_ajouter, name="commande_ligne_ajouter"),
+    path("commandes/<int:pk>/lignes/<int:ligne_pk>/supprimer/", views.commande_ligne_supprimer, name="commande_ligne_supprimer"),
     path("commandes/<int:pk>/lignes/<int:ligne_pk>/modifier/", views.commande_ligne_modifier, name="commande_ligne_modifier"),
     # Archives (historique 2013-2023, consultation seule)
     path("archives/", views.archive_liste, name="archive_liste"),

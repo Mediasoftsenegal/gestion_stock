@@ -129,7 +129,8 @@
         <form method="post" action="{% url 'ventes:commande_ligne_ajouter' commande.pk %}" class="row g-2 align-items-end">{% csrf_token %}
           <div class="col-md-4">
             <label class="form-label small">Ajouter un article</label>
-            <select name="article_id" class="form-select form-select-sm" required>
+            <input type="text" id="ajout_article_search" class="form-control form-control-sm mb-1" placeholder="Rechercher un article…" autocomplete="off">
+            <select name="article_id" id="ajout_article_select" class="form-select form-select-sm" required>
               <option value="">— Article —</option>
               {% for a in articles_commande %}
                 <option value="{{ a.id }}">{{ a.libarticle }}</option>
@@ -200,6 +201,19 @@
 
 {% block extra_js %}
 <script>
+(function () {
+  const recherche = document.getElementById('ajout_article_search');
+  const select = document.getElementById('ajout_article_select');
+  if (recherche && select) {
+    recherche.addEventListener('input', function () {
+      const q = recherche.value.trim().toLowerCase();
+      Array.from(select.options).forEach(function (opt) {
+        if (!opt.value) return;
+        opt.hidden = q !== '' && !opt.textContent.toLowerCase().includes(q);
+      });
+    });
+  }
+})();
 document.querySelectorAll('.btn-edit-ligne').forEach(function (btn) {
   btn.addEventListener('click', function () {
     var row = document.getElementById(btn.getAttribute('data-target'));
